@@ -47,6 +47,9 @@ void DestroyDebugReportCallbackEXT(VkInstance instance, VkDebugReportCallbackEXT
 	}
 }
 
+
+
+
 class Application {
 public: 
 	void run() {
@@ -61,6 +64,8 @@ private:
 	VkDebugReportCallbackEXT callback;
 	GLFWwindow* window;
 	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+	VkDevice device;
+	VkQueue graphicsQueue;
 
 	void initWindow() {
 		if (glfwInit()==GLFW_FALSE) {
@@ -167,6 +172,44 @@ private:
 		createInstance();
 		setupDebugCallback();
 		pickPhysicalDevice();
+		createLogicalDevice();
+	}
+
+	void createLogicalDevice() {
+		QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+
+		VkDeviceQueueCreateInfo queueCreateInfo = {};
+		queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		queueCreateInfo.queueFamilyIndex = indices.graphicsFamily;
+		queueCreateInfo.queueCount = 1;
+
+		float queuePriority = 1.0f;
+		queueCreateInfo.pQueuePriorities = &queuePriority;
+
+		VkPhysicalDeviceFeatures deviceFeatures = {};
+
+		VkDeviceCreateInfo deviceInfo = {};
+		deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+
+		deviceInfo.pQueueCreateInfos = &queueCreateInfo;
+		deviceInfo.queueCreateInfoCount = 1;
+
+		deviceInfo.pEnabledFeatures = &deviceFeatures;
+
+		deviceInfo.enabledExtensionCount = 0;
+
+		if (enableValidationLayers) {
+			deviceInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+			deviceInfo.ppEnabledLayerNames = validationLayers.data();
+		}
+		else {
+			deviceInfo.enabledLayerCount = 0;
+		}
+		if (vkCreateDevice(physicalDevice, &deviceInfo, nullptr, &device) != VK_SUCCESS) {
+			std::cout << "FAILED" << std::endl;
+			throw std::runtime_error("Failed to create logical device");
+		}
+		vkGetDeviceQueue(device, indices.graphicsFamily, 0, &graphicsQueue);
 	}
 
 	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
@@ -257,6 +300,7 @@ private:
 	}
 
 	void cleanup() {
+		vkDestroyDevice(device, nullptr);
 		DestroyDebugReportCallbackEXT(instance, callback, nullptr);
 		vkDestroyInstance(instance, nullptr);
 		glfwDestroyWindow(window);
