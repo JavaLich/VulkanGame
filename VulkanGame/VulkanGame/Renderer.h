@@ -2,6 +2,8 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW\glfw3.h>
 
+
+
 #include <fstream>
 #include <algorithm>
 #include <set>
@@ -15,6 +17,8 @@
 
 #include "Application.h"
 #include "Helper.h"
+
+#include "vk_mem_alloc.h"
 
 const int WIDTH = 800;
 const int HEIGHT = 600;
@@ -104,14 +108,16 @@ private:
 	VkSemaphore imageAvailableSemaphore;
 	VkSemaphore renderFinishedSemaphore;
 	std::vector<Vertex> vertices={
-		{ { 0.0f, -0.5f },{ 1.0f, 1.0f, 1.0f } },
+		{ { 0.0f, -0.5f },{ 1.0f, 0.0f, 0.0f } },
 		{ { 0.5f, 0.5f },{ 0.0f, 1.0f, 0.0f } },
 		{ { -0.5f, 0.5f },{ 0.0f, 0.0f, 1.0f } }
 	};
 	VkBuffer vertexBuffer;
 	VkDeviceMemory vertexBufferMemory;
+	VmaAllocator allocator;
 
 	void initVulkan();
+	void createAllocator();
 	void cleanup();
 	void createGraphicsPipeline();
 	void cleanupSwapChain();
@@ -140,6 +146,7 @@ private:
 	void initWindow();
 	void createSurface();
 	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
-	
+	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 };
 
