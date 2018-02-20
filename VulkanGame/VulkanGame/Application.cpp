@@ -13,9 +13,18 @@ void Application::run() {
 }
 
 void Application::mainLoop() {
+	double previousTime = glfwGetTime();
+	int frameCount = 0;
 	while (!glfwWindowShouldClose(renderer->window)) {
-		glfwPollEvents();
+		double currentTime = glfwGetTime();
+		frameCount++;
+		if (currentTime - previousTime >= 1.0) {
+			std::cout << "FPS: " << frameCount << std::endl;
+			previousTime = currentTime;
+			frameCount = 0;
+		}
 		renderer->loop();
+		glfwPollEvents();
 	}
 }
 
