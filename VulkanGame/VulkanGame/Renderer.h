@@ -108,12 +108,12 @@ private:
 	VkSemaphore imageAvailableSemaphore;
 	VkSemaphore renderFinishedSemaphore;
 	std::vector<Vertex> vertices={
-		{ { 0.0f, -0.5f },{ 1.0f, 0.0f, 0.0f } },
+		{ { 0.0f, -0.5f },{ 1.0f, 1.0f, 1.0f } },
 		{ { 0.5f, 0.5f },{ 0.0f, 1.0f, 0.0f } },
 		{ { -0.5f, 0.5f },{ 0.0f, 0.0f, 1.0f } }
 	};
 	VkBuffer vertexBuffer;
-	VkDeviceMemory vertexBufferMemory;
+	VmaAllocation vertexBufferMemory;
 	VmaAllocator allocator;
 
 	void initVulkan();
@@ -146,7 +146,7 @@ private:
 	void initWindow();
 	void createSurface();
 	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
-	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkBuffer& buffer, VmaAllocation& bufferMemory, VmaMemoryUsage memoryUsage, VmaAllocationInfo& allocInfo);
 	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 };
 
