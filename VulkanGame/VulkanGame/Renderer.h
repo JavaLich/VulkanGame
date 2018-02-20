@@ -11,8 +11,10 @@
 #include <vector>
 #include <stdexcept>
 #include <functional>
+#include <array>
 
 #include "Application.h"
+#include "Helper.h"
 
 const int WIDTH = 800;
 const int HEIGHT = 600;
@@ -25,6 +27,34 @@ const std::vector<const char*> validationLayers = {
 
 const std::vector<const char*> deviceExtensions = {
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME
+};
+
+struct Vertex {
+	glm::vec2 pos;
+	glm::vec3 color;
+
+	static VkVertexInputBindingDescription getBindingDescription() {
+		VkVertexInputBindingDescription bindingDescription = {};
+		bindingDescription.binding = 0;
+		bindingDescription.stride = sizeof(Vertex);
+		bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+		return bindingDescription;
+	}
+
+	static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions()
+	{
+		std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions = {};
+		attributeDescriptions[0].binding = 0;
+		attributeDescriptions[0].location = 0;
+		attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+		attributeDescriptions[0].offset = offsetof(Vertex, pos);
+		attributeDescriptions[1].binding = 0;
+		attributeDescriptions[1].location = 1;
+		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+		attributeDescriptions[1].offset = offsetof(Vertex, color);
+		return attributeDescriptions;
+	}
+
 };
 
 struct QueueFamilyIndices {
@@ -73,12 +103,20 @@ private:
 	std::vector<VkCommandBuffer> commandBuffers;
 	VkSemaphore imageAvailableSemaphore;
 	VkSemaphore renderFinishedSemaphore;
+	std::vector<Vertex> vertices={
+		{ { 0.0f, -0.5f },{ 1.0f, 1.0f, 1.0f } },
+		{ { 0.5f, 0.5f },{ 0.0f, 1.0f, 0.0f } },
+		{ { -0.5f, 0.5f },{ 0.0f, 0.0f, 1.0f } }
+	};
+	VkBuffer vertexBuffer;
+	VkDeviceMemory vertexBufferMemory;
 
 	void initVulkan();
 	void cleanup();
 	void createGraphicsPipeline();
 	void cleanupSwapChain();
 	void createSemaphores();
+	void createVertexBuffers();
 	void createCommandBuffers();
 	void createCommandPool();
 	void createFramebuffers();
@@ -87,7 +125,6 @@ private:
 	SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice physicalDevice);
 	bool checkValidationLayerSupport();
 	void checkRequiredExtensionsPresent(std::vector<VkExtensionProperties> availableExt, const char** requiredExt, int requiredExtCount);
-	static std::vector<char> readFile(const std::string& filename);
 	VkShaderModule createShaderModule(const std::vector<char>& code);
 	void createImageViews();
 	void createSwapChain();
@@ -102,6 +139,7 @@ private:
 	bool checkDeviceExtensionSupport(VkPhysicalDevice device);
 	void initWindow();
 	void createSurface();
+	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 	
 };
 
