@@ -107,14 +107,20 @@ private:
 	std::vector<VkCommandBuffer> commandBuffers;
 	VkSemaphore imageAvailableSemaphore;
 	VkSemaphore renderFinishedSemaphore;
-	std::vector<Vertex> vertices={
-		{ { 0.0f, -0.5f },{ 1.0f, 1.0f, 1.0f } },
-		{ { 0.5f, 0.5f },{ 0.0f, 1.0f, 0.0f } },
-		{ { -0.5f, 0.5f },{ 0.0f, 0.0f, 1.0f } }
+	const std::vector<Vertex> vertices = {
+		{ { -0.5f, -0.5f },{ 1.0f, 0.0f, 0.0f } },
+		{ { 0.5f, -0.5f },{ 0.0f, 1.0f, 0.0f } },
+		{ { 0.5f, 0.5f },{ 0.0f, 0.0f, 1.0f } },
+		{ { -0.5f, 0.5f },{ 1.0f, 1.0f, 1.0f } }
+	};
+	const std::vector<uint16_t> indices = {
+		0, 1, 2, 2, 3, 0
 	};
 	VkBuffer vertexBuffer;
 	VmaAllocation vertexBufferMemory;
 	VmaAllocator allocator;
+	VkBuffer indexBuffer;
+	VmaAllocation indexBufferMemory;
 
 	void initVulkan();
 	void createAllocator();
@@ -128,6 +134,7 @@ private:
 	void createFramebuffers();
 	void createRenderPass();
 	void createInstance();
+	void createIndexBuffers();
 	SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice physicalDevice);
 	bool checkValidationLayerSupport();
 	void checkRequiredExtensionsPresent(std::vector<VkExtensionProperties> availableExt, const char** requiredExt, int requiredExtCount);
@@ -148,5 +155,7 @@ private:
 	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkBuffer& buffer, VmaAllocation& bufferMemory, VmaMemoryUsage memoryUsage, VmaAllocationInfo& allocInfo);
 	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+	static void onWindowResized(GLFWwindow* window, int width, int height);
+
 };
 

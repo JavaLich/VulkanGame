@@ -21,6 +21,7 @@ void Renderer::initVulkan() {
 	createFramebuffers();
 	createCommandPool();
 	createVertexBuffers();
+	createIndexBuffers();
 	createCommandBuffers();
 	createSemaphores();
 }
@@ -40,6 +41,7 @@ void Renderer::loop() {
 void Renderer::cleanup() {
 	cleanupSwapChain();
 	vmaDestroyBuffer(allocator, vertexBuffer, vertexBufferMemory);
+	vmaDestroyBuffer(allocator, indexBuffer, indexBufferMemory);
 	vmaDestroyAllocator(allocator);
 	vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
 	vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
@@ -61,11 +63,25 @@ void Renderer::createVertexBuffers() {
 	createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, stagingBuffer, stagingBufferMemory, VMA_MEMORY_USAGE_CPU_ONLY, stagingAllocInfo);
 
 	
-	memcpy(stagingAllocInfo.pMappedData, vertices.data(), bufferSize);
+	memcpy(stagingAllocInfo.pMappedData, vertices.data(), static_cast<size_t>(bufferSize));
 
 
 	createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, vertexBuffer, vertexBufferMemory, VMA_MEMORY_USAGE_GPU_ONLY, stagingAllocInfo);
 	copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
+	vmaDestroyBuffer(allocator, stagingBuffer, stagingBufferMemory);
+}
+
+void Renderer::createIndexBuffers() {
+	VkDeviceSize bufferSize = sizeof(indices[0])*indices.size();
+	VkBuffer stagingBuffer;
+	VmaAllocation stagingBufferMemory;
+	VmaAllocationInfo stagingAllocInfo = {};
+	createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, stagingBuffer, stagingBufferMemory, VMA_MEMORY_USAGE_CPU_ONLY, stagingAllocInfo);
+
+	memcpy(stagingAllocInfo.pMappedData, indices.data(), static_cast<size_t>(bufferSize));
+
+	createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, indexBuffer, indexBufferMemory, VMA_MEMORY_USAGE_GPU_ONLY, stagingAllocInfo);
+	copyBuffer(stagingBuffer, indexBuffer, bufferSize);
 	vmaDestroyBuffer(allocator, stagingBuffer, stagingBufferMemory);
 }
 
@@ -79,7 +95,12 @@ void Renderer::initWindow() {
 	window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
 
 	glfwSetWindowUserPointer(window, this);
-	glfwSetWindowSizeCallback(window, Application::onWindowResized);
+	
+	glfwSetWindowSizeCallback(window, Renderer::onWindowResized);
+}
+void Renderer::onWindowResized(GLFWwindow* window, int width, int height) {
+	Renderer* renderer = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
+	renderer->recreateSwapChain();
 }
 
 void Renderer::drawFrame() {
@@ -619,7 +640,6 @@ void Renderer::cleanupSwapChain() {
 }
 
 void Renderer::recreateSwapChain() {
-
 	int width, height;
 	glfwGetWindowSize(window, &width, &height);
 	if (width == 0 || height == 0)return;
@@ -670,13 +690,13 @@ void Renderer::createCommandBuffers() {
 		renderPassInfo.clearValueCount = 1;
 		renderPassInfo.pClearValues = &clearColor;
 		vkCmdBeginRenderPass(commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-		vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+			vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
-		VkBuffer vertexBuffers[] = { vertexBuffer };
-		VkDeviceSize offset[] = { 0 };
-		vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offset);
-
-		vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
+			VkBuffer vertexBuffers[] = { vertexBuffer };
+			VkDeviceSize offset[] = { 0 };
+			vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offset);
+			vkCmdBindIndexBuffer(commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+			vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 		vkCmdEndRenderPass(commandBuffers[i]);
 		if (vkEndCommandBuffer(commandBuffers[i]) != VK_SUCCESS) {
 			throw std::runtime_error("Failed to record command buffer");

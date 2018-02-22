@@ -16,15 +16,15 @@ void Application::mainLoop() {
 	double previousTime = glfwGetTime();
 	int frameCount = 0;
 	while (!glfwWindowShouldClose(renderer->window)) {
+		renderer->loop();
+		glfwPollEvents();
 		double currentTime = glfwGetTime();
 		frameCount++;
 		if (currentTime - previousTime >= 1.0) {
 			std::cout << "FPS: " << frameCount << std::endl;
-			previousTime = currentTime;
 			frameCount = 0;
+			previousTime += 1.0;
 		}
-		renderer->loop();
-		glfwPollEvents();
 	}
 }
 
@@ -56,10 +56,6 @@ VkResult Application::CreateDebugReportCallbackEXT(VkInstance instance, const Vk
 	}
 }
 
-void Application::onWindowResized(GLFWwindow* window, int width, int height) {
-	Application* app = reinterpret_cast<Application*>(glfwGetWindowUserPointer(window));
-	app->renderer->recreateSwapChain();
-}
 
 
 VKAPI_ATTR VkBool32 VKAPI_CALL Application::debugCallback(VkDebugReportFlagsEXT flags, VkDebugReportObjectTypeEXT objType, uint64_t obj, size_t location, int32_t code, const char* layerPrefix, const char* msg, void* userData) {
