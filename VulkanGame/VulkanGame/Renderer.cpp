@@ -21,7 +21,7 @@ void Renderer::initVulkan() {
 	createFramebuffers();
 	createCommandPool();
 	createVertexBuffers();
-	createIndexBuffers();
+	//createIndexBuffers();
 	createCommandBuffers();
 	createSemaphores();
 }
@@ -56,18 +56,20 @@ void Renderer::cleanup() {
 
 void Renderer::createVertexBuffers() {
 	VkDeviceSize bufferSize = (sizeof(vertices[0]))*vertices.size();
-
+	VkDeviceSize indexBufferSize = (sizeof(indices[0]))*indices.size();
 	VkBuffer stagingBuffer;
 	VmaAllocation stagingBufferMemory;
 	VmaAllocationInfo stagingAllocInfo = {};
 	createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, stagingBuffer, stagingBufferMemory, VMA_MEMORY_USAGE_CPU_ONLY, stagingAllocInfo);
 
-	
+
 	memcpy(stagingAllocInfo.pMappedData, vertices.data(), static_cast<size_t>(bufferSize));
+	memcpy(static_cast<char*>(stagingAllocInfo.pMappedData) + static_cast<size_t>(bufferSize), indices.data(), static_cast<size_t>(indexBufferSize));
+	
+	std::cout <<bufferSize<< std::endl;
 
-
-	createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, vertexBuffer, vertexBufferMemory, VMA_MEMORY_USAGE_GPU_ONLY, stagingAllocInfo);
-	copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
+	createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, vertexBuffer, vertexBufferMemory, VMA_MEMORY_USAGE_GPU_ONLY, stagingAllocInfo);
+	copyBuffer(stagingBuffer, vertexBuffer, bufferSize+indexBufferSize);
 	vmaDestroyBuffer(allocator, stagingBuffer, stagingBufferMemory);
 }
 
@@ -79,7 +81,7 @@ void Renderer::createIndexBuffers() {
 	createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, stagingBuffer, stagingBufferMemory, VMA_MEMORY_USAGE_CPU_ONLY, stagingAllocInfo);
 
 	memcpy(stagingAllocInfo.pMappedData, indices.data(), static_cast<size_t>(bufferSize));
-
+	
 	createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, indexBuffer, indexBufferMemory, VMA_MEMORY_USAGE_GPU_ONLY, stagingAllocInfo);
 	copyBuffer(stagingBuffer, indexBuffer, bufferSize);
 	vmaDestroyBuffer(allocator, stagingBuffer, stagingBufferMemory);
@@ -691,11 +693,10 @@ void Renderer::createCommandBuffers() {
 		renderPassInfo.pClearValues = &clearColor;
 		vkCmdBeginRenderPass(commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 			vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
-
 			VkBuffer vertexBuffers[] = { vertexBuffer };
 			VkDeviceSize offset[] = { 0 };
 			vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offset);
-			vkCmdBindIndexBuffer(commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+			vkCmdBindIndexBuffer(commandBuffers[i], vertexBuffer, sizeof(vertices[0])*vertices.size(), VK_INDEX_TYPE_UINT16);
 			vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 		vkCmdEndRenderPass(commandBuffers[i]);
 		if (vkEndCommandBuffer(commandBuffers[i]) != VK_SUCCESS) {

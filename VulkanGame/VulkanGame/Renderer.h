@@ -56,6 +56,7 @@ struct Vertex {
 		attributeDescriptions[1].location = 1;
 		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
 		attributeDescriptions[1].offset = offsetof(Vertex, color);
+
 		return attributeDescriptions;
 	}
 
@@ -107,13 +108,13 @@ private:
 	std::vector<VkCommandBuffer> commandBuffers;
 	VkSemaphore imageAvailableSemaphore;
 	VkSemaphore renderFinishedSemaphore;
-	const std::vector<Vertex> vertices = {
+	std::vector<Vertex> vertices = {
 		{ { -0.5f, -0.5f },{ 1.0f, 0.0f, 0.0f } },
 		{ { 0.5f, -0.5f },{ 0.0f, 1.0f, 0.0f } },
 		{ { 0.5f, 0.5f },{ 0.0f, 0.0f, 1.0f } },
 		{ { -0.5f, 0.5f },{ 1.0f, 1.0f, 1.0f } }
 	};
-	const std::vector<uint16_t> indices = {
+	std::vector<uint16_t> indices = {
 		0, 1, 2, 2, 3, 0
 	};
 	VkBuffer vertexBuffer;
