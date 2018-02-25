@@ -2,8 +2,11 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW\glfw3.h>
 
+#define GLM_FORCE_RADIANS
+#include <glm\glm.hpp>
+#include <glm\gtc\matrix_transform.hpp>
 
-
+#include <chrono>
 #include <fstream>
 #include <algorithm>
 #include <set>
@@ -62,6 +65,12 @@ struct Vertex {
 
 };
 
+struct UniformBufferObject {
+	glm::mat4 model;
+	glm::mat4 view;
+	glm::mat4 proj;
+};
+
 struct QueueFamilyIndices {
 	int graphicsFamily = -1;
 	int presentFamily = -1;
@@ -86,10 +95,12 @@ public:
 	void recreateSwapChain();
 	void loop();
 
+	void updateUniformBuffer();
+
 	GLFWwindow* window;
 	VkInstance instance;
 
-private: 
+private:
 	VkDevice device;
 	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
 	VkQueue graphicsQueue;
@@ -101,6 +112,7 @@ private:
 	VkFormat swapChainImageFormat;
 	std::vector<VkImageView> swapChainImageViews;
 	VkRenderPass renderPass;
+	VkDescriptorSetLayout descriptorSetLayout;
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
 	std::vector<VkFramebuffer> swapChainFramebuffers;
@@ -119,11 +131,16 @@ private:
 	};
 	VkBuffer vertexBuffer;
 	VmaAllocation vertexBufferMemory;
+	VmaAllocationInfo allocInfo;
 	VmaAllocator allocator;
-	VkBuffer indexBuffer;
-	VmaAllocation indexBufferMemory;
+	VkDescriptorPool descriptorPool;
+	VkDescriptorSet descriptorSet;
+	VkDeviceSize minUniformBufferOffsetAlignment;
+
 
 	void initVulkan();
+	void createDescriptorSet();
+	void createDescriptorPool();
 	void createAllocator();
 	void cleanup();
 	void createGraphicsPipeline();
@@ -135,7 +152,7 @@ private:
 	void createFramebuffers();
 	void createRenderPass();
 	void createInstance();
-	void createIndexBuffers();
+	void createDescriptorSetLayout();
 	SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice physicalDevice);
 	bool checkValidationLayerSupport();
 	void checkRequiredExtensionsPresent(std::vector<VkExtensionProperties> availableExt, const char** requiredExt, int requiredExtCount);

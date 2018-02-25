@@ -16,8 +16,9 @@ void Application::mainLoop() {
 	double previousTime = glfwGetTime();
 	int frameCount = 0;
 	while (!glfwWindowShouldClose(renderer->window)) {
-		renderer->loop();
 		glfwPollEvents();
+		renderer->loop();
+		
 		double currentTime = glfwGetTime();
 		frameCount++;
 		if (currentTime - previousTime >= 1.0) {
