@@ -22,11 +22,62 @@ void Renderer::initVulkan() {
 	createFramebuffers();
 	createCommandPool();
 	createTextureImage();
+	createTextureImageView();
+	createTextureSampler();
 	createVertexBuffers();
 	createDescriptorPool();
 	createDescriptorSet();
 	createCommandBuffers();
 	createSemaphores();
+}
+
+void Renderer::createTextureSampler() {
+	VkSamplerCreateInfo samplerInfo = {};
+	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	samplerInfo.magFilter = VK_FILTER_LINEAR;
+	samplerInfo.minFilter = VK_FILTER_LINEAR;
+	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	samplerInfo.anisotropyEnable = VK_TRUE;
+	samplerInfo.maxAnisotropy = 16;
+	samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+	samplerInfo.unnormalizedCoordinates = VK_FALSE;
+	samplerInfo.compareEnable = VK_FALSE;
+	samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	samplerInfo.mipLodBias = 0.0f;
+	samplerInfo.minLod = 0.0f;
+	samplerInfo.maxLod = 0.0f;
+	if (vkCreateSampler(device, &samplerInfo, nullptr, &textureSampler) != VK_SUCCESS) {
+		throw std::runtime_error("Failed to create texture sampler");
+	}
+}
+
+void Renderer::createTextureImageView() {
+	textureImageView = createImageView(textureImage, VK_FORMAT_R8G8B8A8_UNORM);
+}
+
+VkImageView Renderer::createImageView(VkImage image, VkFormat format) {
+	VkImageView imageView;
+	VkImageViewCreateInfo viewInfo = {};
+	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	viewInfo.image = image;
+	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	viewInfo.format = format;
+	viewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+	viewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+	viewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+	viewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	viewInfo.subresourceRange.baseMipLevel = 0;
+	viewInfo.subresourceRange.levelCount = 1;
+	viewInfo.subresourceRange.baseArrayLayer = 0;
+	viewInfo.subresourceRange.layerCount = 1;
+	if (vkCreateImageView(device, &viewInfo, nullptr, &imageView) != VK_SUCCESS) {
+		throw std::runtime_error("Failed to create image view");
+	}
+	return imageView;
 }
 
 void Renderer::createTextureImage() {
@@ -200,27 +251,43 @@ void Renderer::createDescriptorSet() {
 	bufferInfo.buffer = vertexBuffer;
 	bufferInfo.offset = minUniformBufferOffsetAlignment;
 	bufferInfo.range = sizeof(UniformBufferObject);
+
+	VkDescriptorImageInfo imageInfo = {};
+	imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	imageInfo.imageView = textureImageView;
+	imageInfo.sampler = textureSampler;
 	
-	VkWriteDescriptorSet descriptorWrite = {};
-	descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptorWrite.dstSet = descriptorSet;
-	descriptorWrite.dstBinding = 0;
-	descriptorWrite.dstArrayElement = 0;
-	descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	descriptorWrite.descriptorCount = 1;
-	descriptorWrite.pBufferInfo = &bufferInfo;
-	vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
+	std::array<VkWriteDescriptorSet, 2> descriptorWrites = {};
+	descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	descriptorWrites[0].dstSet = descriptorSet;
+	descriptorWrites[0].dstBinding = 0;
+	descriptorWrites[0].dstArrayElement = 0;
+	descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	descriptorWrites[0].descriptorCount = 1;
+	descriptorWrites[0].pBufferInfo = &bufferInfo;
+
+	descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	descriptorWrites[1].dstSet = descriptorSet;
+	descriptorWrites[1].dstBinding = 1;
+	descriptorWrites[1].dstArrayElement = 0;
+	descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	descriptorWrites[1].descriptorCount = 1;
+	descriptorWrites[1].pImageInfo = &imageInfo;
+
+	vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 }
 
 void Renderer::createDescriptorPool() {
-	VkDescriptorPoolSize poolSize = {};
-	poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSize.descriptorCount = 1;
+	std::array<VkDescriptorPoolSize, 2> poolSizes = {};
+	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	poolSizes[0].descriptorCount = 1;
+	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	poolSizes[1].descriptorCount = 1;
 
 	VkDescriptorPoolCreateInfo poolInfo = {};
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	poolInfo.poolSizeCount = 1;
-	poolInfo.pPoolSizes = &poolSize;
+	poolInfo.poolSizeCount = 2;
+	poolInfo.pPoolSizes = poolSizes.data();
 	poolInfo.maxSets = 1;
 
 	if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
@@ -235,13 +302,24 @@ void Renderer::createDescriptorSetLayout() {
 	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	uboLayoutBinding.descriptorCount = 1;
 	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+	VkDescriptorSetLayoutBinding samplerLayoutBinding = {};
+	samplerLayoutBinding.binding = 1;
+	samplerLayoutBinding.descriptorCount = 1;
+	samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	samplerLayoutBinding.pImmutableSamplers = nullptr;
+	samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
 	VkDescriptorSetLayoutCreateInfo layoutInfo = {};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutInfo.bindingCount = 1;
-	layoutInfo.pBindings = &uboLayoutBinding;
+	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+	layoutInfo.pBindings = bindings.data();
+
 	if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
 		throw std::runtime_error("Failed to create descriptor set layout");
 	}
+	
 }
 void Renderer::updateUniformBuffer() {
 	static auto startTime = std::chrono::high_resolution_clock::now();
@@ -263,7 +341,9 @@ void Renderer::updateUniformBuffer() {
 }
 void Renderer::cleanup() {
 	cleanupSwapChain();
-
+	
+	vkDestroySampler(device, textureSampler, nullptr);
+	vkDestroyImageView(device, textureImageView, nullptr);
 	vmaDestroyImage(allocator, textureImage, textureImageMemory);
 	vkDestroyDescriptorPool(device, descriptorPool, nullptr);
 	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
@@ -492,7 +572,7 @@ int Renderer::rateDeviceSuitability(VkPhysicalDevice device) {
 	}
 
 	//If device lacks one of these then it is not suitable
-	if (!deviceFeatures.geometryShader || !findQueueFamilies(device).isComplete() || !extensionsSupported || !swapChainAdequate) {
+	if (!deviceFeatures.geometryShader || !findQueueFamilies(device).isComplete() || !extensionsSupported || !swapChainAdequate||!deviceFeatures.samplerAnisotropy) {
 		return 0;
 	}
 
@@ -575,7 +655,7 @@ void Renderer::createLogicalDevice() {
 	}
 
 	VkPhysicalDeviceFeatures deviceFeatures = {};
-
+	deviceFeatures.samplerAnisotropy = VK_TRUE;
 	VkDeviceCreateInfo deviceInfo = {};
 	deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 
@@ -674,23 +754,7 @@ void Renderer::createImageViews() {
 	swapChainImageViews.resize(swapChainImages.size());
 
 	for (size_t i = 0; i < swapChainImages.size(); i++) {
-		VkImageViewCreateInfo createInfo = {};
-		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		createInfo.image = swapChainImages[i];
-		createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-		createInfo.format = swapChainImageFormat;
-		createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-		createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-		createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-		createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-		createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		createInfo.subresourceRange.baseMipLevel = 0;
-		createInfo.subresourceRange.levelCount = 1;
-		createInfo.subresourceRange.baseArrayLayer = 0;
-		createInfo.subresourceRange.layerCount = 1;
-		if (vkCreateImageView(device, &createInfo, nullptr, &swapChainImageViews[i]) != VK_SUCCESS) {
-			throw std::runtime_error("Failed to create image view");
-		}
+		swapChainImageViews[i] = createImageView(swapChainImages[i], swapChainImageFormat);
 	}
 }
 
