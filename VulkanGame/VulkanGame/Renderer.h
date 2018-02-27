@@ -6,6 +6,9 @@
 #include <glm\glm.hpp>
 #include <glm\gtc\matrix_transform.hpp>
 
+
+#include <stb_image.h>
+
 #include <chrono>
 #include <fstream>
 #include <algorithm>
@@ -136,6 +139,8 @@ private:
 	VkDescriptorPool descriptorPool;
 	VkDescriptorSet descriptorSet;
 	VkDeviceSize minUniformBufferOffsetAlignment;
+	VkImage textureImage;
+	VmaAllocation textureImageMemory;
 
 
 	void initVulkan();
@@ -174,6 +179,11 @@ private:
 	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkBuffer& buffer, VmaAllocation& bufferMemory, VmaMemoryUsage memoryUsage, VmaAllocationInfo& allocInfo);
 	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 	static void onWindowResized(GLFWwindow* window, int width, int height);
-
+	void createTextureImage();
+	void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memoryUsage, VkImage& image, VmaAllocation& imageMemory, VmaAllocationInfo& allocInfo);
+	VkCommandBuffer beginSingleTimeCommands();
+	void endSingleTimeCommands(VkCommandBuffer commandBuffer);
+	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newImageLayout);
+	void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 };
 
