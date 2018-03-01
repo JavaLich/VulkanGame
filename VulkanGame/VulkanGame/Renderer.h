@@ -7,6 +7,7 @@
 #include <glm\glm.hpp>
 #include <glm\gtc\matrix_transform.hpp>
 
+#include <tiny_obj_loader.h>
 
 #include <stb_image.h>
 
@@ -27,9 +28,19 @@
 
 #include "vk_mem_alloc.h"
 
+
+#ifdef NDEBUG
+const bool enableValidationLayers = false;
+#else
+const bool enableValidationLayers = true;
+#endif
+
+
 const int WIDTH = 800;
 const int HEIGHT = 600;
-//const char* TITLE = "Vulkan";
+
+const std::string MODEL_PATH = "assets/models/chalet.obj";
+const std::string TEXTURE_PATH = "assets/models/chalet.jpg";
 
 
 const std::vector<const char*> validationLayers = {
@@ -129,22 +140,8 @@ private:
 	std::vector<VkCommandBuffer> commandBuffers;
 	VkSemaphore imageAvailableSemaphore;
 	VkSemaphore renderFinishedSemaphore;
-	std::vector<Vertex> vertices = {
-		{ { -0.5f, -0.5f, 0.0f },{ 1.0f, 0.0f, 0.0f },{ 1.0f, 0.0f } },
-		{ { 0.5f, -0.5f, 0.0f },{ 0.0f, 1.0f, 0.0f },{ 0.0f, 0.0f } },
-		{ { 0.5f, 0.5f, 0.0f },{ 0.0f, 0.0f, 1.0f },{ 0.0f, 1.0f } },
-		{ { -0.5f, 0.5f, 0.0f },{ 1.0f, 1.0f, 1.0f },{ 1.0f, 1.0f } },
-
-		{ { -0.5f, -0.5f, -0.5f },{ 1.0f, 0.0f, 0.0f },{ 1.0f, 0.0f } },
-		{ { 0.5f, -0.5f, -0.5f },{ 0.0f, 1.0f, 0.0f },{ 0.0f, 0.0f } },
-		{ { 0.5f, 0.5f, -0.5f },{ 0.0f, 0.0f, 1.0f },{ 0.0f, 1.0f } },
-		{ { -0.5f, 0.5f, -0.5f },{ 1.0f, 1.0f, 1.0f },{ 1.0f, 1.0f } }
-
-	};
-	std::vector<uint16_t> indices = {
-		0, 1, 2, 2, 3, 0,
-		4, 5, 6, 6, 7, 4
-	};
+	std::vector<Vertex> vertices;
+	std::vector<uint32_t> indices;
 	VkBuffer vertexBuffer;
 	VmaAllocation vertexBufferMemory;
 	VmaAllocationInfo allocInfo;
@@ -159,9 +156,11 @@ private:
 	VkImage depthImage;
 	VmaAllocation depthImageMemory;
 	VkImageView depthImageView;
+	VkDeviceSize fullBufferSize;
 
 
 	void initVulkan();
+	void loadModel();
 	void createDepthResources();
 	VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
 	VkFormat findDepthFormat();
@@ -211,5 +210,3 @@ private:
 	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newImageLayout);
 	void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 };
-
-VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);

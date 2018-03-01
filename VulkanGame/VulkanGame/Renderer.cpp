@@ -2,6 +2,9 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+#define TINYOBJLOADER_IMPLEMENTATION
+#include <tiny_obj_loader.h>
+
 Renderer::Renderer()
 {
 	initVulkan();
@@ -25,11 +28,46 @@ void Renderer::initVulkan() {
 	createTextureImage();
 	createTextureImageView();
 	createTextureSampler();
+	loadModel();
 	createVertexBuffers();
 	createDescriptorPool();
 	createDescriptorSet();
 	createCommandBuffers();
 	createSemaphores();
+}
+
+void Renderer::loadModel() {
+	tinyobj::attrib_t attrib;
+	std::vector<tinyobj::shape_t> shapes;
+	std::vector<tinyobj::material_t> materials;
+	std::string err;
+
+	if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &err, MODEL_PATH.c_str())) {
+		throw std::runtime_error(err);
+	}
+
+	for (const auto& shape : shapes) {
+		for (const auto& index : shape.mesh.indices) {
+			Vertex vertex = {};
+
+			vertex.pos = {
+				attrib.vertices[3 * index.vertex_index + 0],
+				attrib.vertices[3 * index.vertex_index + 1],
+				attrib.vertices[3 * index.vertex_index + 2]
+			};
+
+			vertex.texCoord = {
+				attrib.texcoords[2 * index.texcoord_index + 0],
+				1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+			};
+
+			vertex.color = { 1.0f, 1.0f, 1.0f };
+
+			vertices.push_back(vertex);
+			indices.push_back(indices.size());
+		}
+	}
+	
 }
 
 void Renderer::createDepthResources() {
@@ -114,7 +152,7 @@ VkImageView Renderer::createImageView(VkImage image, VkFormat format, VkImageAsp
 
 void Renderer::createTextureImage() {
 	int texWidth, texHeight, texChannels;
-	stbi_uc* pixels = stbi_load("assets/textures/mona-lisa.png", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+	stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 	VkDeviceSize imageSize = texWidth * texHeight * 4;
 	if (!pixels) {
 		throw std::runtime_error("Failed to load image");
@@ -201,16 +239,26 @@ void Renderer::transitionImageLayout(VkImage image, VkFormat format, VkImageLayo
 	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	barrier.image = image;
-	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+
+	if (newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
+		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+
+		if (hasStencilComponent(format)) {
+			barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+		}
+	}
+	else {
+		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	}
+
 	barrier.subresourceRange.baseMipLevel = 0;
 	barrier.subresourceRange.levelCount = 1;
 	barrier.subresourceRange.baseArrayLayer = 0;
 	barrier.subresourceRange.layerCount = 1;
-	barrier.srcAccessMask = 0;
-	barrier.dstAccessMask = 0;
+
 	VkPipelineStageFlags sourceStage;
 	VkPipelineStageFlags destinationStage;
-	
+
 	if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
 		barrier.srcAccessMask = 0;
 		barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
@@ -233,20 +281,17 @@ void Renderer::transitionImageLayout(VkImage image, VkFormat format, VkImageLayo
 		destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
 	}
 	else {
-		throw std::runtime_error("Unsupported layout transition");
-	}
-	if (newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
-		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-		if (hasStencilComponent(format)) {
-			barrier.subresourceRange.aspectMask != VK_IMAGE_ASPECT_STENCIL_BIT;
-		}
-	}
-	else {
-		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		throw std::invalid_argument("Unsupported layout transition");
 	}
 
-	vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
-
+	vkCmdPipelineBarrier(
+		commandBuffer,
+		sourceStage, destinationStage,
+		0,
+		0, nullptr,
+		0, nullptr,
+		1, &barrier
+	);
 	endSingleTimeCommands(commandBuffer);
 }
 
@@ -412,18 +457,19 @@ void Renderer::cleanup() {
 void Renderer::createVertexBuffers() {
 	VkDeviceSize bufferSize = (sizeof(vertices[0]))*vertices.size();
 	VkDeviceSize indexBufferSize = (sizeof(indices[0]))*indices.size();
-	VkDeviceSize fullBufferSize;
-	if (bufferSize + indexBufferSize%minUniformBufferOffsetAlignment == 0)fullBufferSize = bufferSize + indexBufferSize + sizeof(UniformBufferObject);
-	else fullBufferSize = bufferSize + indexBufferSize + (256+(minUniformBufferOffsetAlignment-(bufferSize+indexBufferSize)%minUniformBufferOffsetAlignment)) + sizeof(UniformBufferObject);
+	fullBufferSize = bufferSize + indexBufferSize;
+	if (bufferSize + indexBufferSize%minUniformBufferOffsetAlignment == 0)fullBufferSize += sizeof(UniformBufferObject);
+	else fullBufferSize = fullBufferSize + ((minUniformBufferOffsetAlignment-(fullBufferSize)%minUniformBufferOffsetAlignment)) + sizeof(UniformBufferObject);
 
 	VkBuffer stagingBuffer;
 	VmaAllocation stagingBufferMemory;
 	VmaAllocationInfo stagingAllocInfo = {};
-	createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, stagingBuffer, stagingBufferMemory, VMA_MEMORY_USAGE_CPU_ONLY, stagingAllocInfo);
+	createBuffer(bufferSize+indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, stagingBuffer, stagingBufferMemory, VMA_MEMORY_USAGE_CPU_ONLY, stagingAllocInfo);
+	std::cout << vertices.size() << std::endl;
 
 	memcpy(stagingAllocInfo.pMappedData, vertices.data(), static_cast<size_t>(bufferSize));
 	memcpy(static_cast<char*>(stagingAllocInfo.pMappedData) + static_cast<size_t>(bufferSize), indices.data(), static_cast<size_t>(indexBufferSize));
-
+	std::cout << bufferSize<< std::endl;
 	createBuffer(fullBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, vertexBuffer, vertexBufferMemory, VMA_MEMORY_USAGE_CPU_TO_GPU, stagingAllocInfo);
 	copyBuffer(stagingBuffer, vertexBuffer, fullBufferSize);
 	vmaDestroyBuffer(allocator, stagingBuffer, stagingBufferMemory);
@@ -448,7 +494,7 @@ void Renderer::onWindowResized(GLFWwindow* window, int width, int height) {
 }
 
 void Renderer::drawFrame() {
-	if (enableValidationLayers)vkQueueWaitIdle(presentQueue);
+
 	uint32_t imageIndex;
 	VkResult result = vkAcquireNextImageKHR(device, swapChain, std::numeric_limits<uint64_t>::max(), imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
 
@@ -460,6 +506,7 @@ void Renderer::drawFrame() {
 		throw std::runtime_error("Failed to acquire swap chain image");
 	}
 
+
 	VkSubmitInfo submitInfo = {};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
@@ -468,22 +515,31 @@ void Renderer::drawFrame() {
 	submitInfo.waitSemaphoreCount = 1;
 	submitInfo.pWaitSemaphores = waitSemaphores;
 	submitInfo.pWaitDstStageMask = waitStages;
+
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &commandBuffers[imageIndex];
+
 	VkSemaphore signalSemaphores[] = { renderFinishedSemaphore };
 	submitInfo.signalSemaphoreCount = 1;
 	submitInfo.pSignalSemaphores = signalSemaphores;
-	if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS) {
-		throw std::runtime_error("Failed to submit draw command buffer");
+	result = vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+	if (result != VK_SUCCESS) {
+
+		throw std::runtime_error("Failed to submit draw command buffer!");
 	}
+
 	VkPresentInfoKHR presentInfo = {};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+
 	presentInfo.waitSemaphoreCount = 1;
 	presentInfo.pWaitSemaphores = signalSemaphores;
+
 	VkSwapchainKHR swapChains[] = { swapChain };
 	presentInfo.swapchainCount = 1;
 	presentInfo.pSwapchains = swapChains;
+
 	presentInfo.pImageIndices = &imageIndex;
+
 	result = vkQueuePresentKHR(presentQueue, &presentInfo);
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
 		recreateSwapChain();
@@ -491,6 +547,7 @@ void Renderer::drawFrame() {
 	else if (result != VK_SUCCESS) {
 		throw std::runtime_error("Failed to present swap chain image");
 	}
+	if(enableValidationLayers)vkQueueWaitIdle(presentQueue);
 }
 
 void Renderer::createSurface() {
@@ -1019,7 +1076,7 @@ void Renderer::createCommandBuffers() {
 		VkBuffer vertexBuffers[] = { vertexBuffer };
 		VkDeviceSize offset[] = { 0 };
 		vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offset);
-		vkCmdBindIndexBuffer(commandBuffers[i], vertexBuffer, sizeof(vertices[0])*vertices.size(), VK_INDEX_TYPE_UINT16);
+		vkCmdBindIndexBuffer(commandBuffers[i], vertexBuffer, sizeof(vertices[0])*vertices.size(), VK_INDEX_TYPE_UINT32);
 		vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
 		vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 		vkCmdEndRenderPass(commandBuffers[i]);

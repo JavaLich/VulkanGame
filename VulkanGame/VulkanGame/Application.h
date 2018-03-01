@@ -14,12 +14,6 @@
 #include "Renderer.h"
 class Renderer;
 
-#ifdef NDEBUG
-const bool enableValidationLayers = false;
-#else
-const bool enableValidationLayers = true;
-#endif
-
 class Application {
 public:
 	void run();
