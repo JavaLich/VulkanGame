@@ -4,8 +4,10 @@
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm\glm.hpp>
 #include <glm\gtc\matrix_transform.hpp>
+#include <glm/gtx/hash.hpp>
 
 #include <tiny_obj_loader.h>
 
@@ -22,6 +24,7 @@
 #include <stdexcept>
 #include <functional>
 #include <array>
+#include <unordered_map>
 
 #include "Application.h"
 #include "Helper.h"
@@ -50,6 +53,7 @@ const std::vector<const char*> validationLayers = {
 const std::vector<const char*> deviceExtensions = {
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
+
 
 struct Vertex {
 	glm::vec3 pos;
@@ -83,7 +87,22 @@ struct Vertex {
 		return attributeDescriptions;
 	}
 
+	bool operator==(const Vertex& other)const {
+		return pos == other.pos && color == other.color && texCoord == other.texCoord;
+	}
+
 };
+
+
+namespace std {
+	template<> struct hash<Vertex> {
+		size_t operator()(Vertex const& vertex) const {
+			return ((hash<glm::vec3>()(vertex.pos) ^
+				(hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^
+				(hash<glm::vec2>()(vertex.texCoord) << 1);
+		}
+	};
+}
 
 struct UniformBufferObject {
 	glm::mat4 model;

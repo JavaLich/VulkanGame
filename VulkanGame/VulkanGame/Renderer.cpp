@@ -46,6 +46,8 @@ void Renderer::loadModel() {
 		throw std::runtime_error(err);
 	}
 
+	std::unordered_map<Vertex, uint32_t> uniqueVertices = {};
+
 	for (const auto& shape : shapes) {
 		for (const auto& index : shape.mesh.indices) {
 			Vertex vertex = {};
@@ -63,8 +65,12 @@ void Renderer::loadModel() {
 
 			vertex.color = { 1.0f, 1.0f, 1.0f };
 
-			vertices.push_back(vertex);
-			indices.push_back(indices.size());
+			if (uniqueVertices.count(vertex) == 0) {
+				uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
+				vertices.push_back(vertex);
+			}
+
+			indices.push_back(uniqueVertices[vertex]);
 		}
 	}
 	
@@ -494,7 +500,7 @@ void Renderer::onWindowResized(GLFWwindow* window, int width, int height) {
 }
 
 void Renderer::drawFrame() {
-
+	if (enableValidationLayers)vkQueueWaitIdle(presentQueue);
 	uint32_t imageIndex;
 	VkResult result = vkAcquireNextImageKHR(device, swapChain, std::numeric_limits<uint64_t>::max(), imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
 
@@ -547,7 +553,7 @@ void Renderer::drawFrame() {
 	else if (result != VK_SUCCESS) {
 		throw std::runtime_error("Failed to present swap chain image");
 	}
-	if(enableValidationLayers)vkQueueWaitIdle(presentQueue);
+	
 }
 
 void Renderer::createSurface() {
