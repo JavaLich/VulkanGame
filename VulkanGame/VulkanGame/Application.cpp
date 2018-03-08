@@ -1,6 +1,9 @@
 #include "Application.h"
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
+
+Renderer* Application::renderer;
+
 Application::Application()
 {
 	renderer = new Renderer();

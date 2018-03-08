@@ -26,8 +26,11 @@
 #include <array>
 #include <unordered_map>
 
+
 #include "Application.h"
+#include "Model.h"
 #include "Helper.h"
+
 
 #include "vk_mem_alloc.h"
 
@@ -105,9 +108,7 @@ namespace std {
 }
 
 struct UniformBufferObject {
-	glm::mat4 model;
-	glm::mat4 view;
-	glm::mat4 proj;
+	glm::mat4 mvp;
 };
 
 struct QueueFamilyIndices {
@@ -124,7 +125,7 @@ struct SwapChainSupportDetails {
 	std::vector<VkSurfaceFormatKHR> formats;
 	std::vector<VkPresentModeKHR> presentModes;
 };
-
+class ModelManager;
 class Renderer
 {
 public:
@@ -132,12 +133,17 @@ public:
 	~Renderer();
 	void drawFrame();
 	void recreateSwapChain();
+	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkBuffer& buffer, VmaAllocation& bufferMemory, VmaMemoryUsage memoryUsage, VmaAllocationInfo& allocInfo);
+	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 	void loop();
 
 	void updateUniformBuffer();
 
 	GLFWwindow* window;
 	VkInstance instance;
+	VmaAllocator allocator;
+	static VkDeviceSize minUniformBufferOffsetAlignment;
+	ModelManager *modelManager;
 
 private:
 	VkDevice device;
@@ -159,15 +165,10 @@ private:
 	std::vector<VkCommandBuffer> commandBuffers;
 	VkSemaphore imageAvailableSemaphore;
 	VkSemaphore renderFinishedSemaphore;
-	std::vector<Vertex> vertices;
-	std::vector<uint32_t> indices;
-	VkBuffer vertexBuffer;
-	VmaAllocation vertexBufferMemory;
-	VmaAllocationInfo allocInfo;
-	VmaAllocator allocator;
+
+
 	VkDescriptorPool descriptorPool;
 	VkDescriptorSet descriptorSet;
-	VkDeviceSize minUniformBufferOffsetAlignment;
 	VkImage textureImage;
 	VmaAllocation textureImageMemory;
 	VkImageView textureImageView;
@@ -194,7 +195,6 @@ private:
 	void createGraphicsPipeline();
 	void cleanupSwapChain();
 	void createSemaphores();
-	void createVertexBuffers();
 	void createCommandBuffers();
 	void createCommandPool();
 	void createFramebuffers();
@@ -219,8 +219,7 @@ private:
 	void initWindow();
 	void createSurface();
 	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
-	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkBuffer& buffer, VmaAllocation& bufferMemory, VmaMemoryUsage memoryUsage, VmaAllocationInfo& allocInfo);
-	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+	
 	static void onWindowResized(GLFWwindow* window, int width, int height);
 	void createTextureImage();
 	void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memoryUsage, VkImage& image, VmaAllocation& imageMemory, VmaAllocationInfo& allocInfo);
@@ -228,4 +227,5 @@ private:
 	void endSingleTimeCommands(VkCommandBuffer commandBuffer);
 	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newImageLayout);
 	void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
+
 };

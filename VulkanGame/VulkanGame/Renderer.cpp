@@ -5,6 +5,10 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
 
+#include "ModelManager.h"
+
+VkDeviceSize Renderer::minUniformBufferOffsetAlignment;
+
 Renderer::Renderer()
 {
 	initVulkan();
@@ -29,7 +33,7 @@ void Renderer::initVulkan() {
 	createTextureImageView();
 	createTextureSampler();
 	loadModel();
-	createVertexBuffers();
+
 	createDescriptorPool();
 	createDescriptorSet();
 	createCommandBuffers();
@@ -37,43 +41,9 @@ void Renderer::initVulkan() {
 }
 
 void Renderer::loadModel() {
-	tinyobj::attrib_t attrib;
-	std::vector<tinyobj::shape_t> shapes;
-	std::vector<tinyobj::material_t> materials;
-	std::string err;
-
-	if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &err, MODEL_PATH.c_str())) {
-		throw std::runtime_error(err);
-	}
-
-	std::unordered_map<Vertex, uint32_t> uniqueVertices = {};
-
-	for (const auto& shape : shapes) {
-		for (const auto& index : shape.mesh.indices) {
-			Vertex vertex = {};
-
-			vertex.pos = {
-				attrib.vertices[3 * index.vertex_index + 0],
-				attrib.vertices[3 * index.vertex_index + 1],
-				attrib.vertices[3 * index.vertex_index + 2]
-			};
-
-			vertex.texCoord = {
-				attrib.texcoords[2 * index.texcoord_index + 0],
-				1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
-			};
-
-			vertex.color = { 1.0f, 1.0f, 1.0f };
-
-			if (uniqueVertices.count(vertex) == 0) {
-				uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
-				vertices.push_back(vertex);
-			}
-
-			indices.push_back(uniqueVertices[vertex]);
-		}
-	}
-	
+	modelManager = new ModelManager(this);
+	modelManager->addModel(MODEL_PATH);
+	modelManager->init();
 }
 
 void Renderer::createDepthResources() {
@@ -348,8 +318,8 @@ void Renderer::createDescriptorSet() {
 	}
 
 	VkDescriptorBufferInfo bufferInfo = {};
-	bufferInfo.buffer = vertexBuffer;
-	bufferInfo.offset = (sizeof(vertices[0])*vertices.size()) + (sizeof(indices[0])*indices.size()) + ((minUniformBufferOffsetAlignment - ((sizeof(vertices[0])*vertices.size()) + (sizeof(indices[0])*indices.size())) % minUniformBufferOffsetAlignment));
+	bufferInfo.buffer = modelManager->buffer;
+	bufferInfo.offset = 0;
 	bufferInfo.range = sizeof(UniformBufferObject);
 
 	VkDescriptorImageInfo imageInfo = {};
@@ -362,7 +332,7 @@ void Renderer::createDescriptorSet() {
 	descriptorWrites[0].dstSet = descriptorSet;
 	descriptorWrites[0].dstBinding = 0;
 	descriptorWrites[0].dstArrayElement = 0;
-	descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
 	descriptorWrites[0].descriptorCount = 1;
 	descriptorWrites[0].pBufferInfo = &bufferInfo;
 
@@ -379,7 +349,7 @@ void Renderer::createDescriptorSet() {
 
 void Renderer::createDescriptorPool() {
 	std::array<VkDescriptorPoolSize, 2> poolSizes = {};
-	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
 	poolSizes[0].descriptorCount = 1;
 	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	poolSizes[1].descriptorCount = 1;
@@ -399,7 +369,7 @@ void Renderer::createDescriptorPool() {
 void Renderer::createDescriptorSetLayout() {
 	VkDescriptorSetLayoutBinding uboLayoutBinding = {};
 	uboLayoutBinding.binding = 0;
-	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
 	uboLayoutBinding.descriptorCount = 1;
 	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
@@ -423,21 +393,22 @@ void Renderer::createDescriptorSetLayout() {
 }
 void Renderer::updateUniformBuffer() {
 	static auto startTime = std::chrono::high_resolution_clock::now();
-	VkDeviceSize bufferSize = (sizeof(vertices[0]))*vertices.size();
-	VkDeviceSize indexBufferSize = (sizeof(indices[0]))*indices.size();
 	auto currentTime = std::chrono::high_resolution_clock::now();
 	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 	UniformBufferObject ubo = {};
-	ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	glm::mat4 model;
+	glm::mat4 view; 
+	glm::mat4 proj;
+	model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 	//ubo.model = glm::translate(ubo.model, glm::sin(time)*glm::vec3(0.0f, 0.0f, 1.0f));
-	ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 10.0f);
-	ubo.proj[1][1] *= -1;
+	view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 10.0f);
+	proj[1][1] *= -1;
+	ubo.mvp = proj * view * model;
+	for (unsigned int i = 0; i < modelManager->models.size(); i++) {
+		memcpy(static_cast<char*>(modelManager->allocInfo.pMappedData) + static_cast<size_t>(modelManager->models.at(i).uniformOffset), &ubo, sizeof(ubo));
+	}
 
-	void* data;
-	vmaMapMemory(allocator, vertexBufferMemory, &data);
-	memcpy(static_cast<char*>(data) + static_cast<size_t>(bufferSize+ indexBufferSize + ((minUniformBufferOffsetAlignment - ((sizeof(vertices[0])*vertices.size()) + (sizeof(indices[0])*indices.size())) % minUniformBufferOffsetAlignment))), &ubo, sizeof(ubo));
-	vmaUnmapMemory(allocator, vertexBufferMemory);
 }
 void Renderer::cleanup() {
 	cleanupSwapChain();
@@ -447,7 +418,7 @@ void Renderer::cleanup() {
 	vmaDestroyImage(allocator, textureImage, textureImageMemory);
 	vkDestroyDescriptorPool(device, descriptorPool, nullptr);
 	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
-	vmaDestroyBuffer(allocator, vertexBuffer, vertexBufferMemory);
+	modelManager->cleanup();
 	vmaDestroyAllocator(allocator);
 	vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
 	vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
@@ -460,26 +431,7 @@ void Renderer::cleanup() {
 	glfwTerminate();
 }
 
-void Renderer::createVertexBuffers() {
-	VkDeviceSize bufferSize = (sizeof(vertices[0]))*vertices.size();
-	VkDeviceSize indexBufferSize = (sizeof(indices[0]))*indices.size();
-	fullBufferSize = bufferSize + indexBufferSize;
-	if (bufferSize + indexBufferSize%minUniformBufferOffsetAlignment == 0)fullBufferSize += sizeof(UniformBufferObject);
-	else fullBufferSize = fullBufferSize + ((minUniformBufferOffsetAlignment-(fullBufferSize)%minUniformBufferOffsetAlignment)) + sizeof(UniformBufferObject);
 
-	VkBuffer stagingBuffer;
-	VmaAllocation stagingBufferMemory;
-	VmaAllocationInfo stagingAllocInfo = {};
-	createBuffer(bufferSize+indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, stagingBuffer, stagingBufferMemory, VMA_MEMORY_USAGE_CPU_ONLY, stagingAllocInfo);
-	std::cout << vertices.size() << std::endl;
-
-	memcpy(stagingAllocInfo.pMappedData, vertices.data(), static_cast<size_t>(bufferSize));
-	memcpy(static_cast<char*>(stagingAllocInfo.pMappedData) + static_cast<size_t>(bufferSize), indices.data(), static_cast<size_t>(indexBufferSize));
-	std::cout << bufferSize<< std::endl;
-	createBuffer(fullBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, vertexBuffer, vertexBufferMemory, VMA_MEMORY_USAGE_CPU_TO_GPU, stagingAllocInfo);
-	copyBuffer(stagingBuffer, vertexBuffer, fullBufferSize);
-	vmaDestroyBuffer(allocator, stagingBuffer, stagingBufferMemory);
-}
 
 void Renderer::initWindow() {
 	if (glfwInit() == GLFW_FALSE) {
@@ -1064,7 +1016,7 @@ void Renderer::createCommandBuffers() {
 		VkCommandBufferBeginInfo beginInfo = {};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
-		beginInfo.pInheritanceInfo = nullptr;
+		
 		vkBeginCommandBuffer(commandBuffers[i], &beginInfo);
 		VkRenderPassBeginInfo renderPassInfo = {};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -1079,12 +1031,16 @@ void Renderer::createCommandBuffers() {
 		renderPassInfo.pClearValues = clearValues.data();
 		vkCmdBeginRenderPass(commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 		vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
-		VkBuffer vertexBuffers[] = { vertexBuffer };
+		VkBuffer vertexBuffers[] = { modelManager->buffer };
 		VkDeviceSize offset[] = { 0 };
-		vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offset);
-		vkCmdBindIndexBuffer(commandBuffers[i], vertexBuffer, sizeof(vertices[0])*vertices.size(), VK_INDEX_TYPE_UINT32);
-		vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
-		vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+		
+		for (unsigned int j = 0; j < modelManager->models.size();j++) {
+			vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offset);
+			vkCmdBindIndexBuffer(commandBuffers[i], modelManager->buffer, modelManager->models.at(j).indexOffset, VK_INDEX_TYPE_UINT32);
+			uint32_t dynamicOffset[] = { static_cast<uint32_t>(modelManager->models.at(j).uniformOffset) };
+			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 1, dynamicOffset);
+			vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(modelManager->models.at(j).indices.size()), 1, 0, 0, 0);
+		}
 		vkCmdEndRenderPass(commandBuffers[i]);
 		if (vkEndCommandBuffer(commandBuffers[i]) != VK_SUCCESS) {
 			throw std::runtime_error("Failed to record command buffer");

@@ -23,10 +23,10 @@ public:
 	void setupDebugCallback();
 	VkResult CreateDebugReportCallbackEXT(VkInstance instance, const VkDebugReportCallbackCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugReportCallbackEXT* pCallback);
 	void DestroyDebugReportCallbackEXT(VkInstance instance, VkDebugReportCallbackEXT callback, const VkAllocationCallbacks* pAllocator);
-
+	static Renderer* renderer;
 private:
 	VkDebugReportCallbackEXT callback;
 	void cleanup();
 	void mainLoop();
-	Renderer* renderer;
+	
 };
