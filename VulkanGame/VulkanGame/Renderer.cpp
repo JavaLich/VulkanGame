@@ -305,10 +305,10 @@ void Renderer::createAllocator() {
 
 void Renderer::loop() {
 	scene->tick();
-	for (int i = 0; i < commandBuffers.size(); i++) {
+	for (unsigned int i = 0; i < commandBuffers.size(); i++) {
 		vkResetCommandBuffer(commandBuffers[i], 0);
-		createCommandBuffers();
 	}
+	createCommandBuffers();
 	drawFrame();
 	vkDeviceWaitIdle(device);
 }
