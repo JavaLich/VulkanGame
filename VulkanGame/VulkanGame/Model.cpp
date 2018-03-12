@@ -30,6 +30,8 @@ Model::~Model()
 {
 }
 
+
+
 void Model::loadModel(const std::string modelPath)
 {
 	tinyobj::attrib_t attrib;

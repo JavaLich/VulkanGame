@@ -21,7 +21,7 @@ void ModelManager::addModel(const std::string modelPath)
 	bufferSize += models.at(models.size()-1).modelSizeBytes;
 }
 
-void ModelManager::init()
+void ModelManager::init(uint32_t numOfActors)
 {
 	VkBuffer stagingBuffer;
 	VmaAllocation stagingBufferMemory;
@@ -35,6 +35,11 @@ void ModelManager::init()
 	renderer->createBuffer(bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, buffer, bufferMemory, VMA_MEMORY_USAGE_CPU_TO_GPU, allocInfo);
 	renderer->copyBuffer(stagingBuffer, buffer, bufferSize);
 	vmaDestroyBuffer(renderer->allocator, stagingBuffer, stagingBufferMemory);
+}
+
+void ModelManager::updateUniform(VkDeviceSize offset, UniformBufferObject ubo)
+{
+	memcpy(static_cast<char*>(allocInfo.pMappedData) + static_cast<size_t>(offset), &ubo, sizeof(ubo));
 }
 
 void ModelManager::cleanup()

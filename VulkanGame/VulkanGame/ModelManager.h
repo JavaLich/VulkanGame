@@ -20,8 +20,10 @@ public:
 	VmaAllocationInfo allocInfo;
 	VkDeviceSize bufferSize;
 	void addModel(const std::string modelPath);
-	void init();
+	void init(uint32_t numOfActors);
+	void updateUniform(VkDeviceSize offset, UniformBufferObject ubo);
 	void cleanup();
 	static Renderer *renderer;
+	VkDeviceSize firstUniformOffset;
 };
 

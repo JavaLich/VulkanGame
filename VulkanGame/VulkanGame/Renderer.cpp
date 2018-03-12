@@ -36,6 +36,7 @@ void Renderer::initVulkan() {
 
 	createDescriptorPool();
 	createDescriptorSet();
+	allocateCommandBuffers();
 	createCommandBuffers();
 	createSemaphores();
 }
@@ -43,7 +44,11 @@ void Renderer::initVulkan() {
 void Renderer::loadModel() {
 	modelManager = new ModelManager(this);
 	modelManager->addModel(MODEL_PATH);
-	modelManager->init();
+	modelManager->addModel(MODEL_PATH1);
+	scene = new Scene();
+	scene->actors.push_back(Actor(&modelManager->models.at(0)));
+	scene->actors.push_back(Actor(&modelManager->models.at(1)));
+	modelManager->init(scene->actors.size());
 }
 
 void Renderer::createDepthResources() {
@@ -299,7 +304,11 @@ void Renderer::createAllocator() {
 }
 
 void Renderer::loop() {
-	updateUniformBuffer();
+	scene->tick();
+	for (int i = 0; i < commandBuffers.size(); i++) {
+		vkResetCommandBuffer(commandBuffers[i], 0);
+		createCommandBuffers();
+	}
 	drawFrame();
 	vkDeviceWaitIdle(device);
 }
@@ -392,23 +401,16 @@ void Renderer::createDescriptorSetLayout() {
 	
 }
 void Renderer::updateUniformBuffer() {
-	static auto startTime = std::chrono::high_resolution_clock::now();
-	auto currentTime = std::chrono::high_resolution_clock::now();
-	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 	UniformBufferObject ubo = {};
-	glm::mat4 model;
 	glm::mat4 view; 
 	glm::mat4 proj;
-	model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	//ubo.model = glm::translate(ubo.model, glm::sin(time)*glm::vec3(0.0f, 0.0f, 1.0f));
 	view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 	proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 10.0f);
 	proj[1][1] *= -1;
-	ubo.mvp = proj * view * model;
-	for (unsigned int i = 0; i < modelManager->models.size(); i++) {
-		memcpy(static_cast<char*>(modelManager->allocInfo.pMappedData) + static_cast<size_t>(modelManager->models.at(i).uniformOffset), &ubo, sizeof(ubo));
+	for (unsigned int i = 0; i < scene->actors.size(); i++) {
+		ubo.mvp = proj * view * scene->actors.at(i).matrix;
+		modelManager->updateUniform(scene->actors.at(i).model->uniformOffset, ubo);
 	}
-
 }
 void Renderer::cleanup() {
 	cleanupSwapChain();
@@ -991,6 +993,7 @@ void Renderer::recreateSwapChain() {
 	createGraphicsPipeline();
 	createDepthResources();
 	createFramebuffers();
+	allocateCommandBuffers();
 	createCommandBuffers();
 }
 
@@ -1003,15 +1006,7 @@ void Renderer::createSemaphores() {
 }
 
 void Renderer::createCommandBuffers() {
-	commandBuffers.resize(swapChainFramebuffers.size());
-	VkCommandBufferAllocateInfo allocInfo = {};
-	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.commandPool = commandPool;
-	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandBufferCount = (uint32_t)commandBuffers.size();
-	if (vkAllocateCommandBuffers(device, &allocInfo, commandBuffers.data()) != VK_SUCCESS) {
-		throw std::runtime_error("Failed to allocate command buffers");
-	}
+	
 	for (size_t i = 0; i < commandBuffers.size(); i++) {
 		VkCommandBufferBeginInfo beginInfo = {};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1033,18 +1028,38 @@ void Renderer::createCommandBuffers() {
 		vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 		VkBuffer vertexBuffers[] = { modelManager->buffer };
 		VkDeviceSize offset[] = { 0 };
-		
-		for (unsigned int j = 0; j < modelManager->models.size();j++) {
-			vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offset);
-			vkCmdBindIndexBuffer(commandBuffers[i], modelManager->buffer, modelManager->models.at(j).indexOffset, VK_INDEX_TYPE_UINT32);
-			uint32_t dynamicOffset[] = { static_cast<uint32_t>(modelManager->models.at(j).uniformOffset) };
+		UniformBufferObject ubo = {};
+		glm::mat4 view;
+		glm::mat4 proj;
+		view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 10.0f);
+		proj[1][1] *= -1;
+		for (unsigned int j = 0; j < scene->actors.size();j++) {
+			ubo.mvp = proj * view * scene->actors.at(j).matrix;
+			modelManager->updateUniform(scene->actors.at(j).model->uniformOffset, ubo);
+			vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, &scene->actors.at(j).model->vertexOffset);
+			vkCmdBindIndexBuffer(commandBuffers[i], modelManager->buffer, scene->actors.at(j).model->indexOffset, VK_INDEX_TYPE_UINT32);
+			uint32_t dynamicOffset[] = { static_cast<uint32_t>(scene->actors.at(j).model->uniformOffset) };
 			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 1, dynamicOffset);
-			vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(modelManager->models.at(j).indices.size()), 1, 0, 0, 0);
+			vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(scene->actors.at(j).model->indices.size()), 1, 0, 0, 0);
 		}
 		vkCmdEndRenderPass(commandBuffers[i]);
 		if (vkEndCommandBuffer(commandBuffers[i]) != VK_SUCCESS) {
 			throw std::runtime_error("Failed to record command buffer");
 		}
+	}
+}
+
+void Renderer::allocateCommandBuffers()
+{
+	commandBuffers.resize(swapChainFramebuffers.size());
+	VkCommandBufferAllocateInfo allocInfo = {};
+	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	allocInfo.commandPool = commandPool;
+	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	allocInfo.commandBufferCount = (uint32_t)commandBuffers.size();
+	if (vkAllocateCommandBuffers(device, &allocInfo, commandBuffers.data()) != VK_SUCCESS) {
+		throw std::runtime_error("Failed to allocate command buffers");
 	}
 }
 
@@ -1054,6 +1069,7 @@ void Renderer::createCommandPool() {
 	VkCommandPoolCreateInfo poolInfo = {};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily;
+	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 	if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
 		throw std::runtime_error("Failed to create command pool");
 	}

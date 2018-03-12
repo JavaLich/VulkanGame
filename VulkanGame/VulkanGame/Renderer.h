@@ -30,6 +30,8 @@
 #include "Application.h"
 #include "Model.h"
 #include "Helper.h"
+#include "Scene.h"
+#include "Actor.h"
 
 
 #include "vk_mem_alloc.h"
@@ -47,7 +49,7 @@ const int HEIGHT = 600;
 
 const std::string MODEL_PATH = "assets/models/chalet.obj";
 const std::string TEXTURE_PATH = "assets/models/chalet.jpg";
-
+const std::string MODEL_PATH1 = "assets/models/stall.obj";
 
 const std::vector<const char*> validationLayers = {
 	"VK_LAYER_LUNARG_standard_validation"
@@ -126,6 +128,7 @@ struct SwapChainSupportDetails {
 	std::vector<VkPresentModeKHR> presentModes;
 };
 class ModelManager;
+class Scene;
 class Renderer
 {
 public:
@@ -144,6 +147,7 @@ public:
 	VmaAllocator allocator;
 	static VkDeviceSize minUniformBufferOffsetAlignment;
 	ModelManager *modelManager;
+	Scene* scene;
 
 private:
 	VkDevice device;
@@ -196,6 +200,7 @@ private:
 	void cleanupSwapChain();
 	void createSemaphores();
 	void createCommandBuffers();
+	void allocateCommandBuffers();
 	void createCommandPool();
 	void createFramebuffers();
 	void createRenderPass();

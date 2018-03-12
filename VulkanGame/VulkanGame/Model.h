@@ -18,6 +18,9 @@ class Model
 public:
 	Model(VkDeviceSize index, const std::string modelPath);
 	~Model();
+
+	
+
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
 
