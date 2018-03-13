@@ -7,7 +7,7 @@ public:
 	Scene();
 	~Scene();
 
-	void tick();
+	void tick(float time);
 
 	std::vector<Actor> actors;
 };

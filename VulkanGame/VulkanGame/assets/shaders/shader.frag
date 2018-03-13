@@ -10,5 +10,4 @@ layout(binding = 1) uniform sampler2D texSampler;
 
 void main(){
 	outColor = texture(texSampler, fragTexCoord);
-	if(outColor == vec4(0))outColor = vec4(1.0);
 }

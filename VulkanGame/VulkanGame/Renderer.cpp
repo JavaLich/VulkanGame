@@ -15,6 +15,7 @@ Renderer::Renderer()
 }
 
 void Renderer::initVulkan() {
+	camera = Camera();
 	initWindow();
 	createInstance();
 	createSurface();
@@ -305,7 +306,12 @@ void Renderer::createAllocator() {
 }
 
 void Renderer::loop() {
-	scene->tick();
+	static auto startTime = std::chrono::high_resolution_clock::now();
+	auto currentTime = std::chrono::high_resolution_clock::now();
+	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)glfwSetWindowShouldClose(window, GLFW_TRUE);
+	camera.tick(window, time);
+	scene->tick(time);
 	rebuildCommandBuffers();
 	drawFrame();
 	vkDeviceWaitIdle(device);
@@ -430,12 +436,16 @@ void Renderer::initWindow() {
 	}
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
+	GLFWmonitor *monitor = glfwGetPrimaryMonitor();
+	const GLFWvidmode* mode = glfwGetVideoMode(monitor);
 
-	window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
+	window = glfwCreateWindow(mode->width, mode->height, "Vulkan", monitor, nullptr);
 
 	glfwSetWindowUserPointer(window, this);
 
 	glfwSetWindowSizeCallback(window, Renderer::onWindowResized);
+	
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
 }
 void Renderer::onWindowResized(GLFWwindow* window, int width, int height) {
 	Renderer* renderer = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
@@ -1059,8 +1069,8 @@ void Renderer::createCommandBuffers() {
 		PushConstantObject pushconstant = {};
 		glm::mat4 view;
 		glm::mat4 proj;
-		view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-		proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 10.0f);
+		view = glm::lookAt(camera.pos, camera.pos + camera.direction, camera.up);
+		proj = glm::perspective(glm::radians(camera.initialFOV), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 100.0f);
 		proj[1][1] *= -1;
 		for (unsigned int j = 0; j < scene->actors.size();j++) {
 			pushconstant.mvp = proj * view * scene->actors.at(j).matrix;

@@ -33,6 +33,7 @@
 #include "Scene.h"
 #include "Actor.h"
 #include "Material.h"
+#include "Camera.h"
 
 #include "vk_mem_alloc.h"
 
@@ -153,6 +154,7 @@ public:
 	ModelManager *modelManager;
 	Scene* scene;
 	VkDevice device;
+	Camera camera;
 private:
 	
 	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
