@@ -29,11 +29,10 @@ void Renderer::initVulkan() {
 	createCommandPool();
 	createDepthResources();
 	createFramebuffers();
-	createTextureImage();
+	textureImage = createTextureImage(TEXTURE_PATH, &textureImageMemory);
 	createTextureImageView();
 	createTextureSampler();
 	loadModel();
-
 	createDescriptorPool();
 	createDescriptorSet();
 	allocateCommandBuffers();
@@ -43,8 +42,8 @@ void Renderer::initVulkan() {
 
 void Renderer::loadModel() {
 	modelManager = new ModelManager(this);
-	modelManager->addModel(MODEL_PATH);
-	modelManager->addModel(MODEL_PATH1);
+	modelManager->addModel(MODEL_PATH, TEXTURE_PATH);
+	modelManager->addModel(MODEL_PATH1, TEXTURE_PATH1);
 	scene = new Scene();
 	scene->actors.push_back(Actor(&modelManager->models.at(0)));
 	scene->actors.push_back(Actor(&modelManager->models.at(1)));
@@ -131,9 +130,10 @@ VkImageView Renderer::createImageView(VkImage image, VkFormat format, VkImageAsp
 	return imageView;
 }
 
-void Renderer::createTextureImage() {
+VkImage Renderer::createTextureImage(const std::string filename, VmaAllocation *imageMemory) {
+	VkImage image;
 	int texWidth, texHeight, texChannels;
-	stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+	stbi_uc* pixels = stbi_load(filename.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 	VkDeviceSize imageSize = texWidth * texHeight * 4;
 	if (!pixels) {
 		throw std::runtime_error("Failed to load image");
@@ -145,11 +145,12 @@ void Renderer::createTextureImage() {
 	memcpy(stagingAllocInfo.pMappedData, pixels, static_cast<size_t>(imageSize));
 	stbi_image_free(pixels);
 	VmaAllocationInfo allocInfo = {};
-	createImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VMA_MEMORY_USAGE_GPU_ONLY, textureImage, textureImageMemory, allocInfo);
-	transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-	copyBufferToImage(stagingBuffer, textureImage, texWidth, texHeight);
-	transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	createImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VMA_MEMORY_USAGE_GPU_ONLY, image, *imageMemory, allocInfo);
+	transitionImageLayout(image, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	copyBufferToImage(stagingBuffer, image, texWidth, texHeight);
+	transitionImageLayout(image, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	vmaDestroyBuffer(allocator, stagingBuffer, stagingBufferMemory);
+	return image;
 }
 
 void Renderer::createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memoryUsage, VkImage & image, VmaAllocation & imageMemory, VmaAllocationInfo& allocInfo)
@@ -305,10 +306,7 @@ void Renderer::createAllocator() {
 
 void Renderer::loop() {
 	scene->tick();
-	for (unsigned int i = 0; i < commandBuffers.size(); i++) {
-		vkResetCommandBuffer(commandBuffers[i], 0);
-	}
-	createCommandBuffers();
+	rebuildCommandBuffers();
 	drawFrame();
 	vkDeviceWaitIdle(device);
 }
@@ -329,7 +327,7 @@ void Renderer::createDescriptorSet() {
 	VkDescriptorBufferInfo bufferInfo = {};
 	bufferInfo.buffer = modelManager->buffer;
 	bufferInfo.offset = 0;
-	bufferInfo.range = sizeof(UniformBufferObject);
+	bufferInfo.range = sizeof(PushConstantObject);
 
 	VkDescriptorImageInfo imageInfo = {};
 	imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -341,7 +339,7 @@ void Renderer::createDescriptorSet() {
 	descriptorWrites[0].dstSet = descriptorSet;
 	descriptorWrites[0].dstBinding = 0;
 	descriptorWrites[0].dstArrayElement = 0;
-	descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+	descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	descriptorWrites[0].descriptorCount = 1;
 	descriptorWrites[0].pBufferInfo = &bufferInfo;
 
@@ -358,7 +356,7 @@ void Renderer::createDescriptorSet() {
 
 void Renderer::createDescriptorPool() {
 	std::array<VkDescriptorPoolSize, 2> poolSizes = {};
-	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	poolSizes[0].descriptorCount = 1;
 	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	poolSizes[1].descriptorCount = 1;
@@ -378,7 +376,7 @@ void Renderer::createDescriptorPool() {
 void Renderer::createDescriptorSetLayout() {
 	VkDescriptorSetLayoutBinding uboLayoutBinding = {};
 	uboLayoutBinding.binding = 0;
-	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	uboLayoutBinding.descriptorCount = 1;
 	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
@@ -400,19 +398,9 @@ void Renderer::createDescriptorSetLayout() {
 	}
 	
 }
-void Renderer::updateUniformBuffer() {
-	UniformBufferObject ubo = {};
-	glm::mat4 view; 
-	glm::mat4 proj;
-	view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 10.0f);
-	proj[1][1] *= -1;
-	for (unsigned int i = 0; i < scene->actors.size(); i++) {
-		ubo.mvp = proj * view * scene->actors.at(i).matrix;
-		modelManager->updateUniform(scene->actors.at(i).model->uniformOffset, ubo);
-	}
-}
+
 void Renderer::cleanup() {
+	std::cout << "Cleaning up..." << std::endl;
 	cleanupSwapChain();
 	
 	vkDestroySampler(device, textureSampler, nullptr);
@@ -430,6 +418,7 @@ void Renderer::cleanup() {
 	vkDestroySurfaceKHR(instance, surface, nullptr);
 	vkDestroyInstance(instance, nullptr);
 
+	glfwDestroyWindow(window);
 	glfwTerminate();
 }
 
@@ -516,6 +505,14 @@ void Renderer::createSurface() {
 	}
 }
 
+void Renderer::rebuildCommandBuffers()
+{
+	for (unsigned int i = 0; i < commandBuffers.size(); i++) {
+		vkResetCommandBuffer(commandBuffers[i], 0);
+	}
+	createCommandBuffers();
+}
+
 uint32_t Renderer::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
 {
 	VkPhysicalDeviceMemoryProperties memProperties;
@@ -556,6 +553,38 @@ void Renderer::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize s
 	copyRegion.size = size;
 	vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
 	endSingleTimeCommands(commandBuffer);
+}
+
+void Renderer::updateDescriptorSet(VkImageView imageView)
+{
+	VkDescriptorBufferInfo bufferInfo = {};
+	bufferInfo.buffer = modelManager->buffer;
+	bufferInfo.offset = 0;
+	bufferInfo.range = sizeof(PushConstantObject);
+
+	VkDescriptorImageInfo imageInfo = {};
+	imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	imageInfo.imageView = imageView;
+	imageInfo.sampler = textureSampler;
+
+	std::array<VkWriteDescriptorSet, 2> descriptorWrites = {};
+	descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	descriptorWrites[0].dstSet = descriptorSet;
+	descriptorWrites[0].dstBinding = 0;
+	descriptorWrites[0].dstArrayElement = 0;
+	descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	descriptorWrites[0].descriptorCount = 1;
+	descriptorWrites[0].pBufferInfo = &bufferInfo;
+
+	descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	descriptorWrites[1].dstSet = descriptorSet;
+	descriptorWrites[1].dstBinding = 1;
+	descriptorWrites[1].dstArrayElement = 0;
+	descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	descriptorWrites[1].descriptorCount = 1;
+	descriptorWrites[1].pImageInfo = &imageInfo;
+
+	vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 }
 
 
@@ -1006,7 +1035,6 @@ void Renderer::createSemaphores() {
 }
 
 void Renderer::createCommandBuffers() {
-	
 	for (size_t i = 0; i < commandBuffers.size(); i++) {
 		VkCommandBufferBeginInfo beginInfo = {};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1028,19 +1056,19 @@ void Renderer::createCommandBuffers() {
 		vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 		VkBuffer vertexBuffers[] = { modelManager->buffer };
 		VkDeviceSize offset[] = { 0 };
-		UniformBufferObject ubo = {};
+		PushConstantObject pushconstant = {};
 		glm::mat4 view;
 		glm::mat4 proj;
-		view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 		proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 10.0f);
 		proj[1][1] *= -1;
 		for (unsigned int j = 0; j < scene->actors.size();j++) {
-			ubo.mvp = proj * view * scene->actors.at(j).matrix;
-			modelManager->updateUniform(scene->actors.at(j).model->uniformOffset, ubo);
+			pushconstant.mvp = proj * view * scene->actors.at(j).matrix;
+			updateDescriptorSet(scene->actors.at(j).model->material->imageView);
+			vkCmdPushConstants(commandBuffers[i], pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pushconstant), &pushconstant);
 			vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, &scene->actors.at(j).model->vertexOffset);
 			vkCmdBindIndexBuffer(commandBuffers[i], modelManager->buffer, scene->actors.at(j).model->indexOffset, VK_INDEX_TYPE_UINT32);
-			uint32_t dynamicOffset[] = { static_cast<uint32_t>(scene->actors.at(j).model->uniformOffset) };
-			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 1, dynamicOffset);
+			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
 			vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(scene->actors.at(j).model->indices.size()), 1, 0, 0, 0);
 		}
 		vkCmdEndRenderPass(commandBuffers[i]);

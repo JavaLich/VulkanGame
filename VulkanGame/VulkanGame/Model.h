@@ -10,16 +10,17 @@
 #include <glm/gtx/hash.hpp>
 
 #include "Renderer.h"
+#include "Material.h"
 
 class Renderer;
 struct Vertex;
 class Model
 {
 public:
-	Model(VkDeviceSize index, const std::string modelPath);
+	Model(VkDeviceSize index, const std::string modelPath, Material *mat);
 	~Model();
 
-	
+	Material *material;
 
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;

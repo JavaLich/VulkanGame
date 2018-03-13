@@ -32,7 +32,7 @@
 #include "Helper.h"
 #include "Scene.h"
 #include "Actor.h"
-
+#include "Material.h"
 
 #include "vk_mem_alloc.h"
 
@@ -50,6 +50,7 @@ const int HEIGHT = 600;
 const std::string MODEL_PATH = "assets/models/chalet.obj";
 const std::string TEXTURE_PATH = "assets/models/chalet.jpg";
 const std::string MODEL_PATH1 = "assets/models/stall.obj";
+const std::string TEXTURE_PATH1 = "assets/models/stallTexture.png";
 
 const std::vector<const char*> validationLayers = {
 	"VK_LAYER_LUNARG_standard_validation"
@@ -109,7 +110,7 @@ namespace std {
 	};
 }
 
-struct UniformBufferObject {
+struct PushConstantObject {
 	glm::mat4 mvp;
 };
 
@@ -138,9 +139,12 @@ public:
 	void recreateSwapChain();
 	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkBuffer& buffer, VmaAllocation& bufferMemory, VmaMemoryUsage memoryUsage, VmaAllocationInfo& allocInfo);
 	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+	void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memoryUsage, VkImage& image, VmaAllocation& imageMemory, VmaAllocationInfo& allocInfo);
+	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
+	VkImage createTextureImage(const std::string filename, VmaAllocation *imageMemory);
+	void updateDescriptorSet(VkImageView imageView);
 	void loop();
-
-	void updateUniformBuffer();
+	void cleanup();
 
 	GLFWwindow* window;
 	VkInstance instance;
@@ -148,9 +152,9 @@ public:
 	static VkDeviceSize minUniformBufferOffsetAlignment;
 	ModelManager *modelManager;
 	Scene* scene;
-
-private:
 	VkDevice device;
+private:
+	
 	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
 	VkQueue graphicsQueue;
 	VkSurfaceKHR surface;
@@ -191,11 +195,10 @@ private:
 	bool hasStencilComponent(VkFormat format);
 	void createTextureSampler();
 	void createTextureImageView();
-	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
 	void createDescriptorSet();
 	void createDescriptorPool();
 	void createAllocator();
-	void cleanup();
+
 	void createGraphicsPipeline();
 	void cleanupSwapChain();
 	void createSemaphores();
@@ -223,11 +226,11 @@ private:
 	bool checkDeviceExtensionSupport(VkPhysicalDevice device);
 	void initWindow();
 	void createSurface();
+	void rebuildCommandBuffers();
 	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 	
 	static void onWindowResized(GLFWwindow* window, int width, int height);
-	void createTextureImage();
-	void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memoryUsage, VkImage& image, VmaAllocation& imageMemory, VmaAllocationInfo& allocInfo);
+	
 	VkCommandBuffer beginSingleTimeCommands();
 	void endSingleTimeCommands(VkCommandBuffer commandBuffer);
 	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newImageLayout);

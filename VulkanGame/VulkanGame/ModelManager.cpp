@@ -15,10 +15,21 @@ ModelManager::~ModelManager()
 {
 }
 
-void ModelManager::addModel(const std::string modelPath)
+void ModelManager::addModel(const std::string modelPath, const std::string texturePath)
 {
-	models.push_back(Model(bufferSize, modelPath));
+	VmaAllocation imageMemory;
+	VkImage image = renderer->createTextureImage(texturePath, &imageMemory);
+	VkImageView imageView = renderer->createImageView(image, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT);
+	Material *mat = new Material(image, imageView);
+	mat->imageMemory = imageMemory;
+	models.push_back(Model(bufferSize, modelPath, mat));
 	bufferSize += models.at(models.size()-1).modelSizeBytes;
+}
+
+void ModelManager::addModel(const std::string modelPath, Material * mat)
+{
+	models.push_back(Model(bufferSize, modelPath, mat));
+	bufferSize += models.at(models.size() - 1).modelSizeBytes;
 }
 
 void ModelManager::init(uint32_t numOfActors)
@@ -37,7 +48,7 @@ void ModelManager::init(uint32_t numOfActors)
 	vmaDestroyBuffer(renderer->allocator, stagingBuffer, stagingBufferMemory);
 }
 
-void ModelManager::updateUniform(VkDeviceSize offset, UniformBufferObject ubo)
+void ModelManager::updateUniform(VkDeviceSize offset, PushConstantObject ubo)
 {
 	memcpy(static_cast<char*>(allocInfo.pMappedData) + static_cast<size_t>(offset), &ubo, sizeof(ubo));
 }
@@ -45,4 +56,10 @@ void ModelManager::updateUniform(VkDeviceSize offset, UniformBufferObject ubo)
 void ModelManager::cleanup()
 {
 	vmaDestroyBuffer(renderer->allocator, buffer, bufferMemory);
+	for (Model model : models) {
+		if (!model.material->destroyed) {
+			model.material->destroy(&renderer->allocator, &renderer->device);
+		}
+	}
+	std::cout << "Cleaned up model manager" << std::endl;
 }

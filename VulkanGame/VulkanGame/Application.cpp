@@ -70,7 +70,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Application::debugCallback(VkDebugReportFlagsEXT 
 
 void Application::cleanup() {
 	DestroyDebugReportCallbackEXT(renderer->instance, callback, nullptr);
-	glfwDestroyWindow(renderer->window);
+	renderer->cleanup();
 }
 
 Application::~Application()

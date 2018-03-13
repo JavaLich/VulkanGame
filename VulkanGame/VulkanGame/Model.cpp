@@ -2,8 +2,9 @@
 
 
 
-Model::Model(VkDeviceSize index, const std::string modelPath)
+Model::Model(VkDeviceSize index, const std::string modelPath, Material* mat)
 {
+	this->material = mat;
 	loadModel(modelPath);
 	this->index = index;
 	vertexOffset = index;
@@ -14,12 +15,12 @@ Model::Model(VkDeviceSize index, const std::string modelPath)
 	range = index + modelSizeBytes;
 	if (range%Renderer::minUniformBufferOffsetAlignment == 0) {
 		uniformOffset = range;
-		modelSizeBytes += sizeof(UniformBufferObject);
-		range += sizeof(UniformBufferObject);
+		modelSizeBytes += sizeof(PushConstantObject);
+		range += sizeof(PushConstantObject);
 	}
 	else {
 		uniformOffset = range + ((Renderer::minUniformBufferOffsetAlignment - (range) % Renderer::minUniformBufferOffsetAlignment));
-		modelSizeBytes = uniformOffset + sizeof(UniformBufferObject);
+		modelSizeBytes = uniformOffset + sizeof(PushConstantObject);
 		range = index + modelSizeBytes;
 	}
 	std::cout << "Range: " << range << ", Model Size Bytes: " << modelSizeBytes << ", Uniform Offset: " << uniformOffset << std::endl;

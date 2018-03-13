@@ -6,6 +6,7 @@
 
 
 #include "Model.h"
+#include "Material.h"
 
 class Model;
 class Renderer;
@@ -19,9 +20,10 @@ public:
 	VmaAllocation bufferMemory;
 	VmaAllocationInfo allocInfo;
 	VkDeviceSize bufferSize;
-	void addModel(const std::string modelPath);
+	void addModel(const std::string modelPath, const std::string texturePath);
+	void addModel(const std::string modelPath, Material *mat);
 	void init(uint32_t numOfActors);
-	void updateUniform(VkDeviceSize offset, UniformBufferObject ubo);
+	void updateUniform(VkDeviceSize offset, PushConstantObject ubo);
 	void cleanup();
 	static Renderer *renderer;
 	VkDeviceSize firstUniformOffset;
