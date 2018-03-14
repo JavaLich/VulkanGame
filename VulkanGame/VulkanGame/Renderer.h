@@ -144,7 +144,7 @@ public:
 	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
 	VkImage createTextureImage(const std::string filename, VmaAllocation *imageMemory);
 	void updateDescriptorSet(VkImageView imageView);
-	void loop();
+	void loop(double time);
 	void cleanup();
 
 	GLFWwindow* window;

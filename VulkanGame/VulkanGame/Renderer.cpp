@@ -305,11 +305,10 @@ void Renderer::createAllocator() {
 	vmaCreateAllocator(&allocatorInfo, &allocator);
 }
 
-void Renderer::loop() {
-	static auto startTime = std::chrono::high_resolution_clock::now();
-	auto currentTime = std::chrono::high_resolution_clock::now();
-	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+void Renderer::loop(double time) {
+	
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)glfwSetWindowShouldClose(window, GLFW_TRUE);
+
 	camera.tick(window, time);
 	scene->tick(time);
 	rebuildCommandBuffers();
@@ -445,8 +444,9 @@ void Renderer::initWindow() {
 
 	glfwSetWindowSizeCallback(window, Renderer::onWindowResized);
 	
-	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 }
+
 void Renderer::onWindowResized(GLFWwindow* window, int width, int height) {
 	Renderer* renderer = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
 	renderer->recreateSwapChain();

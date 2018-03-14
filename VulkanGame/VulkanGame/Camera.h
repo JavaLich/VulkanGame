@@ -9,6 +9,8 @@
 #include <glm\gtc\matrix_transform.hpp>
 #include <glm/gtx/hash.hpp>
 
+#include <iostream>
+
 class Camera
 {
 public:
@@ -22,8 +24,8 @@ public:
 	float horizontalAngle = 3.14f;
 	float verticalAngle = 0.0f;
 	float initialFOV = 45.0f;
-	float cameraSpeed = .03f;
-	float mouseSpeed = 0.0005f;
+	float cameraSpeed = 3.0f;
+	float mouseSpeed = 0.05f;
 	
 };
 

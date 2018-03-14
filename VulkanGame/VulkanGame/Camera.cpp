@@ -24,9 +24,18 @@ void Camera::tick(GLFWwindow* window, float time)
 	glfwSetCursorPos(window, width / 2, height / 2);
 	horizontalAngle += mouseSpeed*time*float(width / 2 - xpos);
 	verticalAngle += mouseSpeed*time*float(height / 2 - ypos);
+	if (verticalAngle > 1.57f)verticalAngle = 1.57f;
+	else if (verticalAngle < -1.57f)verticalAngle = -1.57f;
 	direction = glm::vec3(cos(verticalAngle)*sin(horizontalAngle), sin(verticalAngle), cos(verticalAngle)*cos(horizontalAngle));
 	right = glm::vec3(sin(horizontalAngle - 3.14f / 2.0f), 0, cos(horizontalAngle - 3.14f / 2.0f));
 	up = glm::cross(right, direction);
+
+	if (glfwGetKey(window, GLFW_KEY_0) == GLFW_PRESS) {
+		pos = glm::vec3(2.0f, 2.0f, 2.0f);
+		up = glm::vec3(0, 1.0f, 0);
+		right = glm::vec3(0, 0, 0);
+		direction = glm::vec3(0, 0, 0);
+	}
 	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
 		pos.y += cameraSpeed * time;
 	}
