@@ -2,6 +2,6 @@
 Vulkan Renderer
 
 TODO List:
-*Instanced Renderering
-*Load models with Assimp
-*Lighting
+  *Instanced Renderering
+  *Load models with Assimp
+  *Lighting
