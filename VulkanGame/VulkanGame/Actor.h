@@ -15,6 +15,9 @@ class Actor
 public:
 	Actor(Model *model) : model(model){
 		ticks = true;
+		pos = glm::vec3(0.0f);
+		rot = glm::vec3(0.0f);
+		scale = glm::vec3(1.0f);
 	}
 	~Actor();
 	virtual void tick(float time);
@@ -24,6 +27,10 @@ public:
 
 	//used for translations
 	glm::mat4 matrix;
+	glm::vec3 pos;
+	glm::vec3 vel;
+	glm::vec3 rot;
+	glm::vec3 scale;
 
 private:
 	bool ticks;

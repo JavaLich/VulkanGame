@@ -21,6 +21,8 @@ public:
 	glm::vec3 direction;
 	glm::vec3 up;
 	glm::vec3 right;
+	glm::mat4 view;
+	glm::mat4 proj;
 	float horizontalAngle = 3.14f;
 	float verticalAngle = 0.0f;
 	float initialFOV = 45.0f;

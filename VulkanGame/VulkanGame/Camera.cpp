@@ -54,4 +54,7 @@ void Camera::tick(GLFWwindow* window, float time)
 	if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
 		pos.y -= cameraSpeed * time;
 	}
+	view = glm::lookAt(pos, pos + direction, up);
+	proj = glm::perspective(glm::radians(initialFOV), width / (float)height, 0.01f, 1000.0f);
+	proj[1][1] *= -1;
 }

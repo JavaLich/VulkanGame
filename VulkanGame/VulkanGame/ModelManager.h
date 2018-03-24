@@ -20,10 +20,12 @@ public:
 	VmaAllocation bufferMemory;
 	VmaAllocationInfo allocInfo;
 	VkDeviceSize bufferSize;
-	void addModel(const std::string modelPath, const std::string texturePath);
-	void addModel(const std::string modelPath, Material *mat);
+	void addModel(const std::string modelPath, const std::string texturePath, uint32_t instanceCount);
+	void addModel(const std::string modelPath, Material *mat, uint32_t instanceCount);
+
 	void init(uint32_t numOfActors);
-	void updateUniform(VkDeviceSize offset, PushConstantObject ubo);
+	void updateInstances(VkDeviceSize offset, std::vector<InstanceData> ubo);
+	
 	void cleanup();
 	static Renderer *renderer;
 	VkDeviceSize firstUniformOffset;

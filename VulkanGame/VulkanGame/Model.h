@@ -14,25 +14,31 @@
 
 class Renderer;
 struct Vertex;
+struct InstanceData;
 class Model
 {
 public:
-	Model(VkDeviceSize index, const std::string modelPath, Material *mat);
+	Model(VkDeviceSize index, const std::string modelPath, Material *mat, uint32_t instanceCount);
 	~Model();
 
 	Material *material;
 
+	std::vector<InstanceData> instanceData;
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
+
+	uint32_t instanceCount;
 
 	VkDeviceSize vertexOffset;
 	VkDeviceSize vertexSizeBytes;
 	VkDeviceSize indexOffset;
 	VkDeviceSize indexSizeBytes;
-	VkDeviceSize uniformOffset;
+	VkDeviceSize instanceDataSizeBytes;
+	VkDeviceSize instanceDataOffset;
 	VkDeviceSize modelSizeBytes;
 	VkDeviceSize index;
 	VkDeviceSize range;
+	
 
 private: 
 	void loadModel(const std::string modelPath);

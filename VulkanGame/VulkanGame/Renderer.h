@@ -8,6 +8,8 @@
 #include <glm\glm.hpp>
 #include <glm\gtc\matrix_transform.hpp>
 #include <glm/gtx/hash.hpp>
+#include <glm/gtc/matrix_access.hpp>
+#include <glm/gtx/string_cast.hpp>
 
 #include <tiny_obj_loader.h>
 
@@ -39,7 +41,7 @@
 
 
 #ifdef NDEBUG
-const bool enableValidationLayers = false;
+const bool enableValidationLayers = true;
 #else
 const bool enableValidationLayers = true;
 #endif
@@ -61,6 +63,36 @@ const std::vector<const char*> deviceExtensions = {
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
 
+struct InstanceData {
+	glm::mat4 mvp;
+	static VkVertexInputBindingDescription getBindingDescription() {
+		VkVertexInputBindingDescription bindingDescription = {};
+		bindingDescription.binding = 1;
+		bindingDescription.stride = sizeof(InstanceData);
+		bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_INSTANCE;
+		return bindingDescription;
+	}
+	static std::array<VkVertexInputAttributeDescription, 4> getAttributeDescriptions() {
+		std::array<VkVertexInputAttributeDescription, 4> attributeDescriptions = {};
+		attributeDescriptions[0].binding = 1;
+		attributeDescriptions[0].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+		attributeDescriptions[0].location = 3;
+		attributeDescriptions[0].offset = offsetof(InstanceData, mvp[0]);
+		attributeDescriptions[1].binding = 1;
+		attributeDescriptions[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+		attributeDescriptions[1].location = 4;
+		attributeDescriptions[1].offset = offsetof(InstanceData, mvp[1]);
+		attributeDescriptions[2].binding = 1;
+		attributeDescriptions[2].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+		attributeDescriptions[2].location = 5;
+		attributeDescriptions[2].offset = offsetof(InstanceData, mvp[2]);
+		attributeDescriptions[3].binding = 1;
+		attributeDescriptions[3].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+		attributeDescriptions[3].location = 6;
+		attributeDescriptions[3].offset = offsetof(InstanceData, mvp[3]);
+		return attributeDescriptions;
+	}
+};
 
 struct Vertex {
 	glm::vec3 pos;
@@ -113,6 +145,10 @@ namespace std {
 
 struct PushConstantObject {
 	glm::mat4 mvp;
+};
+
+struct UniformBufferObject {
+
 };
 
 struct QueueFamilyIndices {

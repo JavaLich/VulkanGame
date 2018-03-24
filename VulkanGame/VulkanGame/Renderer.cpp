@@ -43,11 +43,9 @@ void Renderer::initVulkan() {
 
 void Renderer::loadModel() {
 	modelManager = new ModelManager(this);
-	modelManager->addModel(MODEL_PATH, TEXTURE_PATH);
-	modelManager->addModel(MODEL_PATH1, TEXTURE_PATH1);
+	modelManager->addModel(MODEL_PATH, TEXTURE_PATH, 10);
 	scene = new Scene();
-	scene->actors.push_back(Actor(&modelManager->models.at(0)));
-	scene->actors.push_back(Actor(&modelManager->models.at(1)));
+	scene->addActor(Actor(&modelManager->models.at(0)), 1);
 	modelManager->init(scene->actors.size());
 }
 
@@ -306,11 +304,18 @@ void Renderer::createAllocator() {
 }
 
 void Renderer::loop(double time) {
-	
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)glfwSetWindowShouldClose(window, GLFW_TRUE);
 
-	camera.tick(window, time);
-	scene->tick(time);
+	camera.tick(window, static_cast<float>(time));
+	scene->tick(static_cast<float>(time));
+	
+	for (unsigned int i = 0; i < scene->actors.size(); i++) {
+		for (unsigned int j = 0; j < scene->actors[i].model->instanceData.size(); j++) {
+			scene->actors[i].model->instanceData[j].mvp = camera.proj * camera.view * scene->actors[i].model->instanceData[j].mvp;
+		}
+		modelManager->updateInstances(scene->actors.at(i).model->instanceDataOffset, scene->actors.at(i).model->instanceData);
+	}
+
 	rebuildCommandBuffers();
 	drawFrame();
 	vkDeviceWaitIdle(device);
@@ -332,7 +337,7 @@ void Renderer::createDescriptorSet() {
 	VkDescriptorBufferInfo bufferInfo = {};
 	bufferInfo.buffer = modelManager->buffer;
 	bufferInfo.offset = 0;
-	bufferInfo.range = sizeof(PushConstantObject);
+	bufferInfo.range = sizeof(UniformBufferObject);
 
 	VkDescriptorImageInfo imageInfo = {};
 	imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -439,11 +444,10 @@ void Renderer::initWindow() {
 	const GLFWvidmode* mode = glfwGetVideoMode(monitor);
 
 	window = glfwCreateWindow(mode->width, mode->height, "Vulkan", monitor, nullptr);
+	//window = glfwCreateWindow(800, 600, "Vulkan", nullptr, nullptr);
 
 	glfwSetWindowUserPointer(window, this);
-
 	glfwSetWindowSizeCallback(window, Renderer::onWindowResized);
-	
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 }
 
@@ -570,7 +574,7 @@ void Renderer::updateDescriptorSet(VkImageView imageView)
 	VkDescriptorBufferInfo bufferInfo = {};
 	bufferInfo.buffer = modelManager->buffer;
 	bufferInfo.offset = 0;
-	bufferInfo.range = sizeof(PushConstantObject);
+	bufferInfo.range = sizeof(UniformBufferObject);
 
 	VkDescriptorImageInfo imageInfo = {};
 	imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -899,14 +903,29 @@ void Renderer::createGraphicsPipeline() {
 	VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
-	auto bindingDescription = Vertex::getBindingDescription();
-	auto attributeDescription = Vertex::getAttributeDescriptions();
+	std::vector<VkVertexInputBindingDescription> bindingDescriptions;
+	std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
+	auto VertexAttributeDescription = Vertex::getAttributeDescriptions();
+	auto InstanceAttributeDescription = InstanceData::getAttributeDescriptions();
+	bindingDescriptions = {
+		Vertex::getBindingDescription(), InstanceData::getBindingDescription()
+	};
+	attributeDescriptions = {
+		VertexAttributeDescription.at(0),
+		VertexAttributeDescription.at(1),
+		VertexAttributeDescription.at(2),
+		InstanceAttributeDescription.at(0),
+		InstanceAttributeDescription.at(1),
+		InstanceAttributeDescription.at(2),
+		InstanceAttributeDescription.at(3)
+	};
+	std::cout << attributeDescriptions.at(0).location << std::endl;
 
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputInfo.vertexBindingDescriptionCount = 1;
-	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescription.size());
-	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-	vertexInputInfo.pVertexAttributeDescriptions = attributeDescription.data();
+	vertexInputInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(bindingDescriptions.size());
+	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+	vertexInputInfo.pVertexBindingDescriptions = bindingDescriptions.data();
+	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
 	VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
 	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -970,6 +989,13 @@ void Renderer::createGraphicsPipeline() {
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = 1;
 	pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
+	
+	VkPushConstantRange pushConstantRange = {};
+	pushConstantRange.offset = 0;
+	pushConstantRange.size = sizeof(PushConstantObject);
+	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	pipelineLayoutInfo.pushConstantRangeCount = 1;
+	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 	if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
 		throw std::runtime_error("Failed to create pipeline layout");
 	}
@@ -1045,6 +1071,8 @@ void Renderer::createSemaphores() {
 }
 
 void Renderer::createCommandBuffers() {
+	updateDescriptorSet(scene->actors.at(0).model->material->imageView);
+
 	for (size_t i = 0; i < commandBuffers.size(); i++) {
 		VkCommandBufferBeginInfo beginInfo = {};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1066,20 +1094,17 @@ void Renderer::createCommandBuffers() {
 		vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 		VkBuffer vertexBuffers[] = { modelManager->buffer };
 		VkDeviceSize offset[] = { 0 };
-		PushConstantObject pushconstant = {};
-		glm::mat4 view;
-		glm::mat4 proj;
-		view = glm::lookAt(camera.pos, camera.pos + camera.direction, camera.up);
-		proj = glm::perspective(glm::radians(camera.initialFOV), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 100.0f);
-		proj[1][1] *= -1;
+	//	PushConstantObject pushconstant = {};
 		for (unsigned int j = 0; j < scene->actors.size();j++) {
-			pushconstant.mvp = proj * view * scene->actors.at(j).matrix;
-			updateDescriptorSet(scene->actors.at(j).model->material->imageView);
-			vkCmdPushConstants(commandBuffers[i], pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pushconstant), &pushconstant);
-			vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, &scene->actors.at(j).model->vertexOffset);
-			vkCmdBindIndexBuffer(commandBuffers[i], modelManager->buffer, scene->actors.at(j).model->indexOffset, VK_INDEX_TYPE_UINT32);
+		//	pushconstant.mvp = camera.proj * camera.view * scene->actors.at(j).matrix;
+			
+		//	vkCmdPushConstants(commandBuffers[i], pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pushconstant), &pushconstant);
 			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
-			vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(scene->actors.at(j).model->indices.size()), 1, 0, 0, 0);
+			vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, &scene->actors.at(j).model->vertexOffset);
+			vkCmdBindVertexBuffers(commandBuffers[i], 1, 1, vertexBuffers, &scene->actors.at(j).model->instanceDataOffset);
+			vkCmdBindIndexBuffer(commandBuffers[i], modelManager->buffer, scene->actors.at(j).model->indexOffset, VK_INDEX_TYPE_UINT32);
+			
+			vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(scene->actors.at(j).model->indices.size()), 10, 0, 0, 0);
 		}
 		vkCmdEndRenderPass(commandBuffers[i]);
 		if (vkEndCommandBuffer(commandBuffers[i]) != VK_SUCCESS) {
