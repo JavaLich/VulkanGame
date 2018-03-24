@@ -1,2 +1,7 @@
 # VulkanGame
-Vulkan based program
+Vulkan Renderer
+
+TODO List:
+  *Instanced Renderering
+  *Load models with Assimp
+  *Lighting
